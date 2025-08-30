@@ -1,206 +1,41 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>StagSynth — Twin Peaks (Micro Button + Red Panel)</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>StagSynth — Single File</title>
 <style>
-:root{
-  --tp-green:#0c6b3b;
-  --tp-outline:#cfe9cf;
-  --tp-shadow:#0b2d18;
-  --line:#2a0b0b;
-  --panel-rgba-1: rgba(212,0,0,0.98); /* red curtain gradient top */
-  --panel-rgba-2: rgba(131,0,0,0.98); /* red curtain gradient bottom */
-  --btn-bg:#b00000; --btn-bg-hover:#d40000; --btn-border:#300;
-  --red1:#d40000; --red2:#830000;
-}
-*{box-sizing:border-box}
-html,body{
-  margin:0; height:100%;
-  background:
-    linear-gradient(90deg, transparent 0 5%, rgba(0,0,0,.08) 5% 6%, transparent 6% 11%) 0 0/8rem 100%,
-    linear-gradient(180deg,var(--red1),var(--red2));
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-  color:white;
-}
-/* Twin Peaks intro-style text */
-.tp-text{
-  color:var(--tp-green);
-  text-shadow:
-    0 0 1px var(--tp-outline),
-    0 0 2px var(--tp-outline),
-    0 0 4px var(--tp-outline),
-    1px 1px 0 var(--tp-outline),
-    -1px -1px 0 var(--tp-outline),
-    0 2px 8px rgba(0,0,0,.55),
-    0 0 18px var(--tp-shadow);
-  letter-spacing:.05em;
-}
-.tp-small{ font-size:13px; letter-spacing:.1em; }
-.tp-heavy{ font-weight:900; }
-
-.topbar{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:12px;
-  background:rgba(0,0,0,.3);
-  backdrop-filter:blur(2px);
-  border-bottom:1px solid rgba(0,0,0,.25);
-}
-h1{ margin:0; font-weight:900; font-size:24px; letter-spacing:.02em }
-.header-actions{ display:flex; gap:.5rem; align-items:center }
-
-.synth-btn, button, .btn, [role="button"]{
-  background:var(--btn-bg);
-  color:#fff;
-  border:2px solid var(--btn-border);
-  border-radius:10px;
-  padding:.55rem .9rem;
-  font-weight:800; text-transform:uppercase;
-  box-shadow:0 .3rem 0 rgba(0,0,0,.35), 0 0 0 2px rgba(0,0,0,.15) inset;
-  transition:transform .06s ease, box-shadow .06s ease, background .2s ease, filter .2s ease;
-  cursor:pointer;
-}
-.synth-btn:hover{ background:var(--btn-bg-hover); }
-.synth-btn:active{ transform:translateY(.18rem); box-shadow:0 .12rem 0 rgba(0,0,0,.5), 0 0 0 2px rgba(0,0,0,.2) inset; }
-.synth-btn[disabled]{ filter:saturate(.6) brightness(.9); opacity:.7; cursor:not-allowed; }
-.synth-btn .btn-label{ font-size:18px; line-height:1; }
-
-.app{ max-width:820px; margin:0 auto; padding:12px 12px 40px; }
-
-/* Keyboard row with side controls */
-.keyboard-row{
-  display:grid;
-  grid-template-columns:auto 1fr;
-  gap:12px;
-  align-items:stretch;
-}
-.side-controls{
-  display:flex; flex-direction:column; gap:8px; align-items:stretch;
-}
-.oct-btn{ width:72px; justify-content:center; }
-.oct-badge{
-  display:flex; align-items:center; justify-content:center;
-  border:2px solid var(--btn-border); border-radius:10px; padding:.35rem .6rem;
-  background:rgba(0,0,0,.35); min-height:40px; font-weight:800;
-}
-
-/* Ancient microtonal latching button */
-.ancient-btn{
-  width:72px; height:90px; border-radius:10px; border:2px solid #3a0b0b;
-  background:
-    radial-gradient(20px 12px at 18% 22%, rgba(255,255,255,.10), transparent 60%),
-    radial-gradient(16px 10px at 78% 36%, rgba(255,255,255,.08), transparent 60%),
-    radial-gradient(30px 18px at 25% 70%, rgba(0,0,0,.25), transparent 70%),
-    linear-gradient(180deg, var(--red1), var(--red2));
-  box-shadow:
-    inset 0 0 0 2px rgba(0,0,0,.25),
-    inset 0 6px 18px rgba(0,0,0,.45),
-    0 3px 0 rgba(0,0,0,.35);
-  position:relative;
-  display:flex; align-items:center; justify-content:center;
-  cursor:pointer;
-}
-.ancient-btn .bezel{
-  position:absolute; width:44px; height:44px; border-radius:50%;
-  background:radial-gradient(circle at 35% 35%, #6a6a6a, #2c2c2c 60%);
-  box-shadow:inset 0 0 0 3px rgba(0,0,0,.45), 0 4px 12px rgba(0,0,0,.6);
-}
-.ancient-btn .lamp{
-  position:absolute; width:30px; height:30px; border-radius:50%;
-  background:radial-gradient(circle at 35% 35%, #0a3, #062);
-  box-shadow:inset 0 0 0 3px rgba(0,0,0,.35);
-  transform:translateY(4px);
-  transition:transform .12s ease, filter .12s ease, box-shadow .12s ease, opacity .12s ease;
-  opacity:.25; filter:brightness(.5);
-}
-@keyframes greenFlicker{
-  0%{ filter:brightness(1.4); box-shadow:0 0 8px rgba(12,107,59,.75), 0 0 22px rgba(12,107,59,.5); opacity:.95; }
-  25%{ filter:brightness(1.2); box-shadow:0 0 6px rgba(12,107,59,.6), 0 0 18px rgba(12,107,59,.45); opacity:.85; }
-  50%{ filter:brightness(1.45); box-shadow:0 0 10px rgba(12,107,59,.85), 0 0 26px rgba(12,107,59,.6); opacity:1; }
-  75%{ filter:brightness(1.25); box-shadow:0 0 7px rgba(12,107,59,.7), 0 0 20px rgba(12,107,59,.5); opacity:.9; }
-  100%{ filter:brightness(1.4); box-shadow:0 0 8px rgba(12,107,59,.75), 0 0 22px rgba(12,107,59,.5); opacity:.95; }
-}
-.ancient-btn.on .lamp{
-  background:radial-gradient(circle at 35% 35%, var(--tp-green), #0a4);
-  transform:translateY(6px);
-  opacity:1;
-  animation:greenFlicker 1.3s infinite steps(12);
-}
-
-/* Keypad (diagonal stripes) */
-.keypad{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
-.key{
-  background:repeating-linear-gradient(135deg,#000 0 20px,#fff 20px 40px);
-  border:2px solid #000;border-radius:10px;min-height:64px;
-  display:flex;align-items:center;justify-content:center;
-  color:#fff;font-weight:700; position:relative; overflow:hidden;
-  box-shadow:0 2px 0 #0006, inset 0 0 0 2px rgba(255,255,255,0.06);
-  font-size:14px;
-}
-.key small{ opacity:.9; font-size:10px; margin-left:4px; }
-.key::before{
-  content:""; position:absolute; inset:0;
-  background:linear-gradient(180deg, rgba(255,255,255,.06), transparent 40%, rgba(0,0,0,.15) 70%);
-  pointer-events:none;
-}
-.key.on{outline:3px solid var(--tp-outline)}
-
-/* Synth Panel — red curtain gradient */
-.synth-panel{
-  position:fixed; top:-100%; left:0; right:0;
-  transition:top .25s ease;
-  background:linear-gradient(180deg, var(--panel-rgba-1), var(--panel-rgba-2));
-  color:#fff; z-index:9999; padding:12px;
-  backdrop-filter:blur(6px);
-  max-height:75vh; overflow:auto; border-bottom:1px solid var(--line);
-  -webkit-overflow-scrolling: touch;
-}
-.synth-panel.open{ top:0; }
-.panel-actions{ display:flex; gap:.5rem; align-items:center; justify-content:flex-end; margin-bottom:6px; }
-
-.section{
-  display:grid; grid-template-columns:140px 1fr; gap:8px 12px;
-  padding:10px 0; border-top:1px solid var(--line);
-}
-.section h4{ grid-column:1 / -1; margin:.25rem 0; opacity:.95 }
-label{ display:contents }
-input[type=range]{ width:100% }
-select, input[type=number], input[type=text]{
-  border-radius:8px; border:1px solid var(--line); padding:.45rem .6rem; background:#2d0000; color:#fff;
-}
-/* iOS Safari: allow native dropdown overlay */
-select{ -webkit-appearance: menulist; appearance: menulist; }
-
-@media (max-width:700px){
-  .app{ padding:8px }
-  .keyboard-row{ grid-template-columns:1fr; }
-  .side-controls{ flex-direction:row; }
-  .oct-btn{ width:auto; flex:1; }
-  .oct-badge{ min-width:84px; }
-  .ancient-btn{ width:64px; height:80px; }
-}
+:root{--bg:#071127;--panel:#0b1220;--muted:#9fb0c8;--white:#eaf6ff;--accent:#58d6ff}
+*{box-sizing:border-box}html,body{height:100%;margin:0;background:linear-gradient(180deg,#020617,#071027);color:var(--white);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px;position:sticky;top:0;background:linear-gradient(180deg,#020617,#071027 85%,transparent);z-index:30}
+h1{margin:0;font-weight:700;font-size:18px;letter-spacing:.2px}.plus{color:var(--accent)}
+.synth-btn{background:var(--panel);border:1px solid #1b2741;color:var(--white);padding:8px 12px;border-radius:999px;cursor:pointer}.synth-btn:active{transform:translateY(1px)}
+.synth-panel{position:fixed;top:0;left:0;right:0;transform:translateY(-100%);transition:transform .25s ease;background:#0b1220e6;color:var(--white);z-index:25;padding:12px;backdrop-filter:blur(8px);max-height:75vh;overflow:auto;border-bottom:1px solid #1b2741}
+.synth-panel.open{transform:translateY(0)}.section{display:grid;grid-template-columns:140px 1fr;gap:8px 12px;padding:10px 0;border-top:1px solid #1b2741}.section h4{grid-column:1 / -1;margin:.25rem 0;opacity:.9}label{display:contents}input[type=range]{width:100%}
+.app{max-width:720px;margin:0 auto;padding:12px 12px 120px}.hint{opacity:.75;font-size:14px;margin:8px 0 12px}
+.keypad-wrap{border:1px solid #1b2741;border-radius:14px;padding:10px;background:linear-gradient(180deg,#0b1220,#0b1220);max-height:72vh;overflow:auto}
+.keypad{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:minmax(56px,1fr);gap:8px;user-select:none}
+.key{background:linear-gradient(180deg,#101a33,#0c1427);border:1px solid #1b2741;border-radius:12px;padding:0;text-align:center;font-weight:700;letter-spacing:.4px;box-shadow:0 2px 0 #0006;touch-action:manipulation;display:flex;align-items:center;justify-content:center;min-height:56px}
+.key .label{font-size:14px;opacity:.9}.key:active,.key.on{outline:2px solid var(--accent)}
+.footer{position:fixed;bottom:0;left:0;right:0;padding:8px 12px;font-size:12px;opacity:.7;background:linear-gradient(0deg,#020617,transparent)}
+@media (max-width:700px){.section{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
   <header class="topbar">
-    <div style="display:flex;align-items:center;gap:.6rem">
-      <h1 class="tp-text tp-heavy">StagSynth</h1>
-    </div>
+    <h1>StagSynth</h1>
     <div class="header-actions">
-      <button id="synthToggle" class="synth-btn" aria-expanded="false" aria-controls="synthPanel" aria-label="Open menu">
-        <span class="btn-label tp-text">☰</span>
-      </button>
+      <button id="startBtn" class="synth-btn" title="Start or Resume Audio">Start Audio</button>
+      <button id="useFallbackBtn" class="synth-btn" title="Reliable simple engine">Use Fallback</button>
+      <button id="useWorkletBtn" class="synth-btn" title="High-quality engine (beta)">Try HQ Engine</button>
+      <span id="state" class="state">engine: fallback (default)</span>
+      <button id="synthToggle" class="synth-btn" aria-expanded="false" aria-controls="synthPanel">Synth</button>
     </div>
   </header>
 
-  <!-- ===== Control Panel ===== -->
   <div id="synthPanel" class="synth-panel" role="region" aria-label="Synth controls">
-    <div class="panel-actions">
-      <button id="closePanel" class="synth-btn" aria-label="Close menu"><span class="btn-label tp-text">☰</span></button>
-    </div>
     <div class="section">
-      <h4 class="tp-text">Oscillators</h4>
+      <h4>Oscillators</h4>
       <label>Shape <select id="shape">
         <option>saw</option><option>square</option><option>triangle</option><option>sine</option><option>noise</option>
       </select></label>
@@ -214,93 +49,127 @@ select{ -webkit-appearance: menulist; appearance: menulist; }
       <label>Noise Color <select id="noiseColor"><option>white</option><option>pink</option></select></label>
     </div>
     <div class="section">
-      <h4 class="tp-text">Filter</h4>
+      <h4>Filter</h4>
       <label>Mode <select id="mode"><option>lp</option><option>bp</option><option>hp</option></select></label>
       <label>Cutoff <input type="range" id="cutoff" min="60" max="10000" step="1" value="1600"/></label>
       <label>Resonance <input type="range" id="resonance" min="0" max="1" step="0.01" value="0.2"/></label>
     </div>
     <div class="section">
-      <h4 class="tp-text">Envelope</h4>
+      <h4>Envelope</h4>
       <label>A <input type="range" id="a" min="0" max="1" step="0.001" value="0.01"/></label>
       <label>D <input type="range" id="d" min="0" max="1" step="0.001" value="0.08"/></label>
       <label>S <input type="range" id="s" min="0" max="1" step="0.01" value="0.6"/></label>
       <label>R <input type="range" id="r" min="0" max="2" step="0.01" value="0.15"/></label>
     </div>
     <div class="section">
-      <h4 class="tp-text">FX</h4>
+      <h4>FX</h4>
       <label>Drive <input type="range" id="drive" min="0" max="1" step="0.01" value="0.0"/></label>
       <label>Mix <input type="range" id="mix" min="0" max="1" step="0.01" value="0.0"/></label>
     </div>
     <div class="section">
-      <h4 class="tp-text">Presets</h4>
+      <h4>Global</h4>
+      <label>Rows <input type="number" id="rows" min="4" max="8" value="8"></label>
+      <label>Octave <input type="number" id="octave" min="-2" max="2" value="0"></label>
+    </div>
+    <div class="section">
+      <h4>Presets</h4>
       <label>Preset <select id="presetSelect"></select></label>
       <label>Name <input id="presetName" type="text" placeholder="New preset name"/></label>
       <div style="grid-column:1 / -1; display:flex; gap:8px; flex-wrap:wrap; margin-top:6px">
-        <button id="savePresetBtn" class="synth-btn"><span class="btn-label tp-text tp-small">Save</span></button>
-        <button id="loadPresetBtn" class="synth-btn"><span class="btn-label tp-text tp-small">Load</span></button>
-        <button id="deletePresetBtn" class="synth-btn"><span class="btn-label tp-text tp-small">Delete</span></button>
-        <button id="exportPresetsBtn" class="synth-btn"><span class="btn-label tp-text tp-small">Export</span></button>
-        <button id="importPresetsBtn" class="synth-btn"><span class="btn-label tp-text tp-small">Import</span></button>
-        <button id="shareLinkBtn" class="synth-btn"><span class="btn-label tp-text tp-small">Copy Link</span></button>
-        <button id="copyJsonBtn" class="synth-btn"><span class="btn-label tp-text tp-small">Copy JSON</span></button>
+        <button id="savePresetBtn" class="synth-btn">Save</button>
+        <button id="loadPresetBtn" class="synth-btn">Load</button>
+        <button id="deletePresetBtn" class="synth-btn">Delete</button>
+        <button id="exportPresetsBtn" class="synth-btn">Export</button>
+        <button id="importPresetsBtn" class="synth-btn">Import</button>
+        <button id="shareLinkBtn" class="synth-btn">Copy Share Link</button>
+        <button id="copyJsonBtn" class="synth-btn">Copy JSON</button>
         <input id="importFile" type="file" accept=".json,application/json" style="display:none"/>
       </div>
     </div>
   </div>
 
   <main class="app">
-    <div class="keyboard-row">
-      <div class="side-controls">
-        <!-- Ancient Microtonal Toggle Button (flickers green when ON) -->
-        <div id="microBtn" class="ancient-btn" role="button" tabindex="0" aria-pressed="false" title="Microtonality (quarter tones)">
-          <div class="bezel"></div>
-          <div class="lamp"></div>
-        </div>
-
-        <button id="octDown" class="synth-btn oct-btn" aria-label="Octave Down"><span class="btn-label">−</span></button>
-        <div id="octBadge" class="oct-badge tp-text tp-small">0</div>
-        <button id="octUp" class="synth-btn oct-btn" aria-label="Octave Up"><span class="btn-label">+</span></button>
-      </div>
+    <p class="hint">Tap keys or use your keyboard. Audio starts on your first tap. Toggle panel with “Synth”.</p>
+    <div id="keypadWrap" class="keypad-wrap">
       <div id="keypad" class="keypad" aria-label="Keypad"></div>
+    </div>
+    <div class="testbar" style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px;flex-wrap:wrap">
+      <button id="testTone" class="synth-btn">Test Tone</button>
     </div>
   </main>
 
-<script>
-/* ===================== Script (SINGLE declarations) ===================== */
+  <footer class="footer">
+    <span>Made for mobile & desktop • WebAudio</span>
+  </footer>
 
-/* Note names (single declaration) */
-const NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-
-/* Globals */
-let audioCtx=null, synth=null;
-const GRID_W=4;
-let gridRows=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)?8:4;
-let octaveOffset=0;
-const BASE_MIDI=60;
-/* Microtonal state (single declaration) */
-let microtonal=false; // false=12-TET, true=24-TET
-
-/* Auto-unlock audio context on first gesture */
-async function ensureAudio(){
-  if(synth) return true;
-  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
-  await audioCtx.resume();
-  // iOS unlock pulse (silent)
-  try{
-    const b=audioCtx.createBuffer(1,1,audioCtx.sampleRate);
-    const s=audioCtx.createBufferSource(); s.buffer=b; s.connect(audioCtx.destination); s.start(0);
-  }catch{}
-  synth=makeFallbackSynth(audioCtx);
-  pushParams(); // initialize with current UI values
-  return true;
+<script id="engine-worklet-inline" type="application/javascript">
+class NPEngine extends AudioWorkletProcessor{
+  process(inputs,outputs){
+    const out=outputs[0]||[]; const L=out[0]; const R=out[1]||out[0];
+    if(!L) return true;
+    for(let k=0;k<L.length;k++){ const s=0; L[k]+=s; if(R) R[k]+=s; }
+    return true;
+  }
 }
+registerProcessor('np-engine', NPEngine);
+</script>
 
-/* Fallback synth with main+sub osc, filter, drive/mix, and noise option */
+<script>
+// --- tiny fetch shim for presets.json (not used in single-file, but safe) ---
+(function(){
+  const PRESETS_INLINE = '{"Init":{}}';
+  const oldFetch = window.fetch;
+  window.fetch = async function(resource, init){
+    const url = (typeof resource === 'string') ? resource : (resource?.url || '');
+    if(/presets\.json$/i.test(url)){
+      return new Response(PRESETS_INLINE, {status:200, headers:{'Content-Type':'application/json'}});
+    }
+    return oldFetch.apply(this, arguments);
+  };
+})();
+
+let firstNoteGuarded=false;
+
+// Inactivity watchdog: fade all after 1s idle
+let lastInteract=Date.now();
+setInterval(()=>{
+  const now=Date.now();
+  if(now-lastInteract>1000){
+    try{synth?.killAll?.(0.2);}catch{}
+    lastInteract=now;
+  }
+},500);
+
+// Overlay-free, fallback-first synth
+let audioCtx=null,synth=null,engineMode='fallback';
+const pressed=new Set(),GRID_W=4;let gridRows=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)?8:4,octaveOffset=0;const BASE_MIDI=60;
+const midiToFreq=m=>440*Math.pow(2,(m-69)/12), midiName=m=>['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][m%12]+(Math.floor(m/12)-1);
+function buildKeypad(){const pad=document.getElementById('keypad');pad.innerHTML='';pad.style.gridTemplateColumns=`repeat(${GRID_W},1fr)`;const start=BASE_MIDI+12*octaveOffset,total=GRID_W*gridRows;for(let i=0;i<total;i++){const m=start+i,b=document.createElement('button');b.className='key';b.dataset.midi=String(m);b.innerHTML=`<div class="label">${midiName(m)}</div>`;['pointerdown','mousedown'].forEach(ev=>b.addEventListener(ev,(e)=>pointerDown(e,b)));['pointerup','pointerleave','mouseup'].forEach(ev=>b.addEventListener(ev,(e)=>pointerUp(e,b)));b.addEventListener('touchstart',e=>{e.preventDefault();pointerDown(b)},{passive:false});b.addEventListener('touchend',e=>{e.preventDefault();pointerUp(b)},{passive:false});b.addEventListener('lostpointercapture', ()=>{ if (b.classList.contains('on')) pointerUp(null,b); });
+    pad.appendChild(b)}}
+function pointerDown(e,btn){
+  try{ if(e&&e.pointerId!=null&&btn.setPointerCapture) btn.setPointerCapture(e.pointerId);}catch{}
+const m=parseInt(btn.dataset.midi,10);if(isNaN(m))return;lastInteract=Date.now();
+  btn.classList.add('on');pressed.add(m);ensureAudio().then(()=>synth?.noteOn(m,.95))}
+function pointerUp(e,btn){
+  try{ if(e&&e.pointerId!=null&&btn.releasePointerCapture) btn.releasePointerCapture(e.pointerId);}catch{}
+const m=parseInt(btn.dataset.midi,10);if(isNaN(m))return;lastInteract=Date.now();
+  btn.classList.remove('on');pressed.delete(m);try{synth?.noteOff(m)}catch{}}
+function allNotesUp(){for(const btn of document.querySelectorAll('.key.on')){lastInteract=Date.now();
+  btn.classList.remove('on');const m=parseInt(btn.dataset.midi,10);if(!isNaN(m))try{synth?.noteOff(m)}catch{}}pressed.clear()}
+window.addEventListener('pointercancel',allNotesUp,{passive:true});window.addEventListener('touchcancel',allNotesUp,{passive:true});window.addEventListener('mouseup',allNotesUp,{passive:true});window.addEventListener('blur',allNotesUp);document.addEventListener('visibilitychange',()=>{if(document.hidden)allNotesUp()});
+function bindKeyboard(){const map=['a','w','s','e','d','f','t','g','y','h','u','j','k','o','l','p'];window.addEventListener('keydown',e=>{if(e.repeat)return;const idx=map.indexOf(e.key?.toLowerCase?.());if(idx<0)return;const btn=document.querySelectorAll('.key')[idx];if(!btn)return;lastInteract=Date.now();
+  btn.classList.add('on');const m=parseInt(btn.dataset.midi,10);pressed.add(m);ensureAudio().then(()=>synth?.noteOn(m,.95))});window.addEventListener('keyup',e=>{const idx=map.indexOf(e.key?.toLowerCase?.());if(idx<0)return;const btn=document.querySelectorAll('.key')[idx];if(!btn)return;lastInteract=Date.now();
+  btn.classList.remove('on');const m=parseInt(btn.dataset.midi,10);pressed.delete(m);try{synth?.noteOff(m)}catch{}})}
+function updateState(t){const el=document.getElementById('state');if(el)el.textContent=t}
+async function ensureAudio(){if(synth)return true;if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});await audioCtx.resume();if(engineMode==='worklet'){try{await startWorklet();updateState('engine: HQ worklet')}catch(e){console.error(e);engineMode='fallback';await startFallback();updateState('engine: fallback (worklet failed)')}}else{await startFallback();updateState('engine: fallback')}return true}
+async function startWorklet(){const blip=audioCtx.createBuffer(1,1,audioCtx.sampleRate),src=audioCtx.createBufferSource();src.buffer=blip;src.connect(audioCtx.destination);src.start();const __wrkBlob=new Blob([document.getElementById('engine-worklet-inline').textContent],{type:'application/javascript'});const __wrkUrl=URL.createObjectURL(__wrkBlob);await audioCtx.audioWorklet.addModule(__wrkUrl);setTimeout(()=>URL.revokeObjectURL(__wrkUrl), 2000);const engine=new AudioWorkletNode(audioCtx,'np-engine',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2],channelCount:2,channelCountMode:'explicit',channelInterpretation:'speakers',processorOptions:{sampleRate:audioCtx.sampleRate}}),lim=audioCtx.createDynamicsCompressor(),out=audioCtx.createGain();lim.threshold.value=-6;lim.knee.value=0;lim.ratio.value=20;lim.attack.value=.003;lim.release.value=.12;out.gain.value=.95;engine.connect(lim).connect(out).connect(audioCtx.destination);synth={set(n,v){engine.port.postMessage({type:'param',name:n,value:v})},noteOn(m,v=.95){engine.port.postMessage({type:'noteOn',midi:m,velocity:v})},noteOff(m){engine.port.postMessage({type:'noteOff',midi:m})}};pushParams()}
+async function startFallback(){synth=makeFallbackSynth(audioCtx);pushParams()}
+
 function makeFallbackSynth(audio){
   const voices=new Map();
   const master=audio.createGain(); master.gain.value=.9;
 
-  // FX chain (filter -> waveshaper), dry/wet mix
+  // FX: filter + distortion; dry/wet mix
   const dry=audio.createGain(); dry.gain.value=1.0;
   const wet=audio.createGain(); wet.gain.value=0.0;
   const filter=audio.createBiquadFilter(); filter.type='lowpass'; filter.frequency.value=1600; filter.Q.value=0.2;
@@ -317,29 +186,39 @@ function makeFallbackSynth(audio){
   master.connect(dry).connect(audio.destination);
   master.connect(filter).connect(shaper).connect(wet).connect(audio.destination);
 
-  // Parameters
+  // Parameters (independent sub)
   const params={
     shape:'sawtooth',
     subShape:'off',
-    detune:0, subDetune:0,
+    detune:0,
+    subDetune:0,
     cutoff:1600, resonance:0.2, mode:'lp',
     a:0.01, d:0.08, s:0.6, r:0.15,
     drive:0, mix:0,
-    subLevel:0.8, subOctave:1,
+    subLevel:0.8,
+    subOctave:1,
     noiseColor:'white'
   };
+
   const shapeMap={saw:'sawtooth', sawtooth:'sawtooth', square:'square', triangle:'triangle', sine:'sine', noise:'noise', off:'off'};
+  const midiToFreqLocal=m=>440*Math.pow(2,(m-69)/12);
 
   function env(){ const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
     return { a:Math.max(.001,params.a), d:Math.max(.001,params.d), s:clamp(params.s,0,1), r:Math.max(.001,params.r) };
   }
+
   function makeNoise(audio,color){
     const buffer=audio.createBuffer(1, audio.sampleRate*2, audio.sampleRate);
     const data=buffer.getChannelData(0);
-    if(color==='pink'){ let b0=0.0; const a=0.997; for(let i=0;i<data.length;i++){ const w=Math.random()*2-1; b0=a*b0+(1-a)*w; data[i]=b0*1.5; } }
-    else { for(let i=0;i<data.length;i++){ data[i]=Math.random()*2-1; } }
+    if(color==='pink'){
+      let b0=0.0; const a=0.997;
+      for(let i=0;i<data.length;i++){ const white=Math.random()*2-1; b0=a*b0+(1-a)*white; data[i]=b0*1.5; }
+    }else{
+      for(let i=0;i<data.length;i++){ data[i]=Math.random()*2-1; }
+    }
     const src=audio.createBufferSource(); src.buffer=buffer; src.loop=true; return src;
   }
+
   function buildMain(freq){
     const wf=shapeMap[params.shape]||'sawtooth';
     if (wf==='noise'){ return [makeNoise(audio, params.noiseColor||'white')]; }
@@ -347,6 +226,7 @@ function makeFallbackSynth(audio){
     o.frequency.value = freq * Math.pow(2, (params.detune||0)/1200);
     return [o];
   }
+
   function buildSub(freq){
     const wf=shapeMap[params.subShape]||'off';
     if (wf==='off') return [];
@@ -358,11 +238,11 @@ function makeFallbackSynth(audio){
   }
 
   const MAX_DUR=8.0;
+
   return{
     noteOn(m,v=.95){
-      const key = String(m);
-      const old=voices.get(key); if(old){ try{ old.nodes.forEach(nd=>{try{nd.stop()}catch{}});}catch{} voices.delete(key); }
-      const freq=440*Math.pow(2,(m-69)/12);
+      const old=voices.get(m); if(old){ try{ old.nodes.forEach(nd=>{try{nd.stop()}catch{}});}catch{} voices.delete(m); }
+      const freq=midiToFreqLocal(m);
       const g=audio.createGain(); g.gain.value=1e-5; g.connect(master);
       const subGain=audio.createGain(); subGain.gain.value=Math.max(0,Math.min(1,params.subLevel||0.8)); subGain.connect(g);
       const e=env(); const t=audio.currentTime;
@@ -379,129 +259,102 @@ function makeFallbackSynth(audio){
       const voice={nodes,g,e};
       voice.timer=setTimeout(()=>{
         const now=audio.currentTime;
-        try{
-          g.gain.cancelScheduledValues(now); g.gain.setValueAtTime(g.gain.value,now);
-          g.gain.linearRampToValueAtTime(1e-5, now+.2);
-          nodes.forEach(nd=>{ try{ nd.stop(now+.22); }catch{} });
-        }catch{}
-        voices.delete(key);
+        try{ g.gain.cancelScheduledValues(now); g.gain.setValueAtTime(g.gain.value,now);
+             g.gain.linearRampToValueAtTime(1e-5, now+.2);
+             nodes.forEach(nd=>{ try{ nd.stop(now+.22); }catch{} }); }catch{}
+        voices.delete(m);
       }, Math.max(500,MAX_DUR*1000));
-      voices.set(key,voice);
+
+      voices.set(m,voice);
     },
     noteOff(m){
-      const key = String(m);
-      const v=voices.get(key); if(!v) return;
+      const v=voices.get(m); if(!v) return;
       const t=audio.currentTime;
       v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(v.g.gain.value,t);
       v.g.gain.linearRampToValueAtTime(1e-5, t+v.e.r);
       v.nodes.forEach(nd=>{ try{ nd.stop(t+v.e.r+.02); }catch{} });
-      clearTimeout(v.timer); voices.delete(key);
+      clearTimeout(v.timer); voices.delete(m);
     },
     killAll(fade=.2){
       const t=audio.currentTime;
-      for(const [key,v] of voices){
+      for(const [m,v] of voices){
         try{
           v.g.gain.cancelScheduledValues(t);
           v.g.gain.setValueAtTime(v.g.gain.value,t);
           v.g.gain.linearRampToValueAtTime(1e-5, t+Math.max(.02,fade));
           v.nodes.forEach(nd=>{ try{ nd.stop(t+Math.max(.03,fade+.02)); }catch{} });
         }catch{}
-        clearTimeout(v.timer); voices.delete(key);
+        clearTimeout(v.timer); voices.delete(m);
       }
     },
     set(name,value){
-      const setNum = (x)=> (typeof x==='number')?x:parseFloat(x||0);
       if(name==='shape'||name==='subShape'){
         const mapped = shapeMap[String(value)] || String(value);
-        if(name==='shape') this._shape = params.shape = mapped;
-        else this._subShape = params.subShape = mapped;
+        if(name==='shape') params.shape = mapped; else params.subShape = mapped;
         return;
       }
-      params[name]=(name==='noiseColor')? String(value) : setNum(value);
-      if(name==='cutoff'){ filter.frequency.value=Math.max(50, params.cutoff|0); }
-      else if(name==='resonance'){ filter.Q.value=Math.max(0, Math.min(20, params.resonance*20)); }
-      else if(name==='mode'){ filter.type=(params.mode==='hp')?'highpass':(params.mode==='bp')?'bandpass':'lowpass'; }
-      else if(name==='mix'){ const mix=Math.max(0,Math.min(1,params.mix)); wet.gain.value=mix; dry.gain.value=1-mix; }
-      else if(name==='drive'){ shaper.curve=makeCurve(Math.max(0,Math.min(1,params.drive))); }
+      params[name]=value;
+      if(name==='cutoff'){ filter.frequency.value=Math.max(50, value|0); }
+      else if(name==='resonance'){ filter.Q.value=Math.max(0, Math.min(20, value*20)); }
+      else if(name==='mode'){ filter.type=(value==='hp')?'highpass':(value==='bp')?'bandpass':'lowpass'; }
+      else if(name==='mix'){ const mix=Math.max(0,Math.min(1,value)); wet.gain.value=mix; dry.gain.value=1-mix; }
+      else if(name==='drive'){ shaper.curve=makeCurve(Math.max(0,Math.min(1,value))); }
     }
   };
 }
 
-/* Labels (¼ mark for in-between) */
-function midiLabel(m){
-  const isQuarter = Math.abs(m - Math.round(m)) > 1e-6;
-  const base = Math.floor(m);
-  const name = NAMES[base % 12];
-  const octave = Math.floor(base/12) - 1;
-  return isQuarter ? `${name}${octave} ¼` : `${name}${octave}`;
-}
+function pushParams(){if(!synth)return;['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor'].forEach(id=>{const el=document.getElementById(id);if(!el)return;const val=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value;try{synth.set(id,val)}catch{}})}
+function bindPanel(){const panel=document.getElementById('synthPanel'),toggle=document.getElementById('synthToggle');toggle.onclick=()=>{const open=panel.classList.toggle('open');toggle.setAttribute('aria-expanded',open?'true':'false')};['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor'].forEach(id=>document.getElementById(id)?.addEventListener('input',pushParams));const rowsEl=document.getElementById('rows'),octEl=document.getElementById('octave');rowsEl.value=gridRows;octEl.value=octaveOffset;rowsEl.addEventListener('input',()=>{gridRows=Math.max(4,Math.min(8,parseInt(rowsEl.value||'8',10)));buildKeypad()});octEl.addEventListener('input',()=>{octaveOffset=Math.max(-2,Math.min(2,parseInt(octEl.value||'0',10)));buildKeypad()})}
 
-/* Keyboard grid */
-function buildKeypad(){
-  const pad=document.getElementById('keypad'); pad.innerHTML='';
-  pad.style.gridTemplateColumns=`repeat(${GRID_W},1fr)`;
-  const step = microtonal ? 0.5 : 1;
-  const start = BASE_MIDI + 12*octaveOffset;
-  const total = GRID_W*gridRows;
-  for(let i=0;i<total;i++){
-    const m=start + i*step;
-    const b=document.createElement('button');
-    b.className='key'; b.dataset.midi=m;
-    b.innerHTML = `<span>${midiLabel(m)}</span>`;
-    const down = ()=>{ ensureAudio(); synth?.noteOn(m,.95); b.classList.add('on'); };
-    const up   = ()=>{ synth?.noteOff(m); b.classList.remove('on'); };
-    ['pointerdown','mousedown'].forEach(ev=>b.addEventListener(ev,down));
-    ['pointerup','pointerleave','mouseup'].forEach(ev=>b.addEventListener(ev,up));
-    b.addEventListener('touchstart',e=>{e.preventDefault(); down();},{passive:false});
-    b.addEventListener('touchend',e=>{e.preventDefault(); up();},{passive:false});
-    pad.appendChild(b);
+// Periodic voice sweep: if no keys are pressed, make sure no voices drone forever
+function sweepVoices(){
+  if (pressed.size === 0 && typeof synth?.killAll === 'function'){
+    synth.killAll(0.25); // gentle 250ms fade
   }
 }
+setInterval(sweepVoices, 1500);
 
-/* Panel / Params */
-function pushParams(){
-  if(!synth) return;
-  ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor']
-    .forEach(id=>{
-      const el=document.getElementById(id); if(!el) return;
-      const val=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value;
-      try{synth.set(id,val)}catch{}
-    });
-}
-function bindPanel(){
-  const panel=document.getElementById('synthPanel');
-  const toggle=document.getElementById('synthToggle');
-  const close=document.getElementById('closePanel');
-  function setOpen(open){
-    panel.classList.toggle('open', open);
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if(!open){ document.getElementById('keypad')?.scrollIntoView({behavior:'smooth'}); }
-  }
-  toggle.onclick=()=> setOpen(!panel.classList.contains('open'));
-  close.onclick=()=> setOpen(false);
-  ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor']
-    .forEach(id=>document.getElementById(id)?.addEventListener('input',pushParams));
-}
+function bindHeaderButtons(){document.getElementById('startBtn').addEventListener('click',()=>{audioCtx?.resume();ensureAudio()});document.getElementById('useFallbackBtn').addEventListener('click',()=>{engineMode='fallback';synth=null;ensureAudio()});document.getElementById('useWorkletBtn').addEventListener('click',()=>{engineMode='worklet';synth=null;ensureAudio()});document.getElementById('testTone').addEventListener('click',async()=>{await ensureAudio();synth?.noteOn(69,1);setTimeout(()=>synth?.noteOff(69),400)});const first=e=>{document.removeEventListener('pointerdown',first,true);ensureAudio()};document.addEventListener('pointerdown',first,true)}
 
-/* Presets (localStorage + URL hash share + import/export) */
+// ===== Preset Store & Sharing (localStorage + URL hash) =====
 const NP_PRESET_KEY = 'np_presets_v1';
-const PRESET_PARAMS = ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor'];
-function loadPresetStore(){ try{ const raw=localStorage.getItem(NP_PRESET_KEY); if(raw) return JSON.parse(raw); }catch{} return {}; }
-function savePresetStore(store){ try{ localStorage.setItem(NP_PRESET_KEY, JSON.stringify(store)); }catch{} }
+const PRESET_PARAMS = ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','rows','octave','subLevel','subOctave','noiseColor'];
+
+function loadPresetStore(){
+  try{ const raw = localStorage.getItem(NP_PRESET_KEY); if(raw) return JSON.parse(raw); }catch{}
+  return {};
+}
+function savePresetStore(store){
+  try{ localStorage.setItem(NP_PRESET_KEY, JSON.stringify(store)); }catch{}
+}
+async function loadDefaultPresets(){
+  try{ const res = await fetch('presets.json',{cache:'no-store'}); if(!res.ok) return {}; return await res.json(); }catch{ return {}; }
+}
 function readUIParams(){
-  const o={}; PRESET_PARAMS.forEach(id=>{ const el=document.getElementById(id); if(!el) return;
-    o[id]=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value; });
+  const o={};
+  PRESET_PARAMS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    o[id]=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value;
+  });
   return o;
 }
 function applyPreset(obj){
   if(!obj) return;
   Object.entries(obj).forEach(([k,v])=>{
-    const el=document.getElementById(k); if(!el) return;
+    const el=document.getElementById(k);
+    if(!el) return;
     if(el.type==='range'||el.type==='number'){ el.value=(typeof v==='number')?v:parseFloat(v||0); }
     else { el.value=v; }
   });
-  pushParams();
-  buildKeypad();
+  try{ pushParams(); }catch{}
+  // rows/octave side-effects
+  try{
+    const rowsEl=document.getElementById('rows');
+    const octEl=document.getElementById('octave');
+    if(rowsEl){ gridRows=Math.max(4,Math.min(8,parseInt(rowsEl.value||'8',10))); buildKeypad(); }
+    if(octEl){ octaveOffset=Math.max(-2,Math.min(2,parseInt(octEl.value||'0',10))); buildKeypad(); }
+  }catch{}
 }
 function b64EncodeUnicode(str){ try{ return btoa(unescape(encodeURIComponent(str))); }catch{ return btoa(str); } }
 function b64DecodeUnicode(str){ try{ return decodeURIComponent(escape(atob(str))); }catch{ return atob(str); } }
@@ -532,12 +385,17 @@ async function initPresetsUI(){
   const impF=document.getElementById('importFile');
   const shareB=document.getElementById('shareLinkBtn');
   const copyJB=document.getElementById('copyJsonBtn');
+
   if(!select) return;
 
   let store=loadPresetStore();
   if(Object.keys(store).length===0){
-    store['Init']=readUIParams(); savePresetStore(store);
+    const defaults=await loadDefaultPresets();
+    if(defaults && Object.keys(defaults).length){ store=defaults; savePresetStore(store); }
+    else { store['Init']=readUIParams(); savePresetStore(store); }
   }
+
+  // Merge from URL hash if present
   const merged=await maybeImportFromURLHash(); if(merged){ store=merged; }
 
   function refreshSelect(selectedName){
@@ -562,7 +420,7 @@ async function initPresetsUI(){
   expB?.addEventListener('click', ()=>{
     const blob=new Blob([JSON.stringify(store,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob); const a=document.createElement('a');
-    a.href=url; a.download='stagsynth-presets.json'; document.body.appendChild(a); a.click(); a.remove();
+    a.href=url; a.download='notepat-presets.json'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   });
   impB?.addEventListener('click', ()=> impF?.click());
@@ -576,7 +434,7 @@ async function initPresetsUI(){
   });
   shareB?.addEventListener('click', async()=>{
     const url=buildShareURLFromStore(store);
-    try{ await navigator.clipboard.writeText(url); shareB.textContent='Link Copied!'; setTimeout(()=>shareB.textContent='Copy Link',1200); }
+    try{ await navigator.clipboard.writeText(url); shareB.textContent='Link Copied!'; setTimeout(()=>shareB.textContent='Copy Share Link',1200); }
     catch{ prompt('Copy this URL:', url); }
   });
   copyJB?.addEventListener('click', async()=>{
@@ -586,52 +444,7 @@ async function initPresetsUI(){
   });
 }
 
-/* Top UI bindings (incl. octave and ancient microtonal button) */
-function bindTopUI(){
-  // Auto-unlock on first gesture
-  const unlockOnce = () => {
-    ensureAudio();
-    window.removeEventListener('pointerdown', unlockOnce, true);
-    window.removeEventListener('touchend',  unlockOnce, true);
-    window.removeEventListener('keydown',   unlockOnce, true);
-  };
-  window.addEventListener('pointerdown', unlockOnce, true);
-  window.addEventListener('touchend',  unlockOnce, true);
-  window.addEventListener('keydown',   unlockOnce, true);
-
-  // Ancient microtonal toggle
-  const btn = document.getElementById('microBtn');
-  function applyMicro(){ btn.classList.toggle('on', microtonal); btn.setAttribute('aria-pressed', String(microtonal)); buildKeypad(); }
-  function toggleMicro(){ microtonal = !microtonal; applyMicro(); }
-  btn.addEventListener('click', ()=>{ ensureAudio(); toggleMicro(); });
-  btn.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleMicro(); }});
-  applyMicro(); // start OFF (12-TET)
-
-  // Octave controls
-  const badge = document.getElementById('octBadge');
-  function updateBadge(){ badge.textContent = String(octaveOffset); }
-  document.getElementById('octDown').onclick = () => {
-    octaveOffset = Math.max(-2, octaveOffset - 1);
-    updateBadge(); buildKeypad();
-  };
-  document.getElementById('octUp').onclick = () => {
-    octaveOffset = Math.min( 2, octaveOffset + 1);
-    updateBadge(); buildKeypad();
-  };
-  updateBadge();
-
-  // Safety: clear voices periodically
-  setInterval(()=>{ if (typeof synth?.killAll==='function') synth.killAll(0.25); }, 2000);
-}
-
-/* Init */
-function main(){
-  buildKeypad();
-  bindPanel();
-  bindTopUI();
-  initPresetsUI();
-}
-main();
+function main(){buildKeypad();bindKeyboard();bindPanel();bindHeaderButtons();initPresetsUI()}main();
 </script>
 </body>
 </html>
