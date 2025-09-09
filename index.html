@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>StagSynth — v8g18</title>
+<title>StagSynth — v8g18-mobilefix</title>
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="%23ff2727" stroke-width="6"/><text x="32" y="42" text-anchor="middle" font-size="32" fill="%23ff2727">🦉</text></svg>' />
 <style>
 /* ===== Twin Peaks Theme ===== */
@@ -299,62 +299,133 @@ let recChunks=[], recStartTs=0, recInter=null; const MAX_REC_S=15;
 const TAKES_KEY='stagsynth_takes_v4';
 function loadTakes(){ try{ return JSON.parse(localStorage.getItem(TAKES_KEY)||'{}'); }catch{return{}} }
 function saveTakes(o){ try{ localStorage.setItem(TAKES_KEY, JSON.stringify(o)); }catch{} }
-
 /* ===== Setup / teardown ===== */
 function setupRecordingBus(){
   const a=audioCtx;
   mixNode=a.createGain(); mixNode.gain.value=.95;
-  limiter=a.createDynamicsCompressor(); limiter.threshold.value=-10; limiter.knee.value=20; limiter.ratio.value=8; limiter.attack.value=0.003; limiter.release.value=0.25;
+  limiter=a.createDynamicsCompressor();
+  limiter.threshold.value=-10; limiter.knee.value=20; limiter.ratio.value=8;
+  limiter.attack.value=0.003; limiter.release.value=0.25;
   mixNode.connect(limiter).connect(a.destination);
   mediaStreamDest=a.createMediaStreamDestination(); limiter.connect(mediaStreamDest);
 }
+
+/* Choose a recording mime that works on iOS (AAC/MP4), while keeping desktop/webm on Chrome */
+function pickBestAudioMime(){
+  const prefer=[
+    'audio/mp4',              // iOS-friendly (AAC in MP4)
+    'audio/aac',              // raw AAC
+    'audio/mpeg',             // MP3 fallback
+    'audio/ogg;codecs=opus',  // some Android/desktop
+    'audio/webm;codecs=opus', // desktop Chrome
+    'audio/webm'
+  ];
+  for(const m of prefer){
+    try{
+      if(window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+    }catch{}
+  }
+  return '';
+}
+
 function startTopRecording(){
   if(!mediaStreamDest) return;
-  if(!('MediaRecorder' in window)){ document.getElementById('recTimer').textContent='Recording not supported on this browser.'; return; }
+  if(!('MediaRecorder' in window)){
+    document.getElementById('recTimer').textContent='Recording not supported on this browser.';
+    return;
+  }
   if(mediaRecorder && mediaRecorder.state==='recording') return;
-  const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm';
-  mediaRecorder=new MediaRecorder(mediaStreamDest.stream,{mimeType:mime,audioBitsPerSecond:128000});
+
+  const mime = pickBestAudioMime();
+  try{
+    mediaRecorder = mime
+      ? new MediaRecorder(mediaStreamDest.stream,{ mimeType:mime, audioBitsPerSecond:128000 })
+      : new MediaRecorder(mediaStreamDest.stream);
+  }catch(err){
+    document.getElementById('recTimer').textContent='Recorder init failed.';
+    console.warn('MediaRecorder init error', err);
+    return;
+  }
+
   recChunks=[];
+
   // UI feedback on (arm & light)
-  const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
+  const recBtn=document.getElementById('recBtn');
+  const recLabel=document.getElementById('recLabel');
   recBtn.classList.remove('dim'); recBtn.classList.add('recording'); recLabel.textContent='Stop';
-  mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recChunks.push(e.data); };
-  mediaRecorder.onstop=async()=>{
+
+  mediaRecorder.ondataavailable=(e)=>{ if(e.data && e.data.size>0) recChunks.push(e.data); };
+
+  mediaRecorder.onstop = async ()=>{
     try{
-      const blob=new Blob(recChunks, {type:mime});
-      const arr=await blob.arrayBuffer();
+      const blob = new Blob(recChunks, { type: mediaRecorder.mimeType || mime || 'audio/mp4' });
+      const arr  = await blob.arrayBuffer();
       await ensureAudio();
-      const tmp=await audioCtx.decodeAudioData(arr.slice(0));
-      const wavAB = encodeWAVFromBuffer(tmp);
-      const b64 = u8ToB64(new Uint8Array(wavAB));
+
+      // Try native decode first (works for AAC on iOS and WebM/Opus on desktop where supported)
+      let decoded=null;
+      try{
+        decoded = await audioCtx.decodeAudioData(arr.slice(0));
+      }catch(decErr){
+        console.warn('decodeAudioData failed, attempting element fallback', decErr);
+      }
+
+      // Fallback decode via HTMLAudioElement + OfflineAudioContext if needed
+      if(!decoded){
+        const url = URL.createObjectURL(blob);
+        const el  = new Audio();
+        el.src = url; el.crossOrigin='anonymous';
+        // Try to get metadata ready without actually playing sound
+        await el.play().catch(()=>{}); el.pause();
+        const dur = Math.max(0.01, isFinite(el.duration) && el.duration>0 ? el.duration : 1.0);
+        const off = new OfflineAudioContext(2, Math.ceil((audioCtx.sampleRate||48000) * dur), audioCtx.sampleRate||48000);
+        const src = off.createMediaElementSource(el);
+        src.connect(off.destination);
+        el.currentTime = 0;
+        decoded = await off.startRendering();
+        URL.revokeObjectURL(url);
+      }
+
+      // Convert decoded buffer to WAV, stash locally, and auto-load into Granulator
+      const wavAB = encodeWAVFromBuffer(decoded);
+      const b64   = u8ToB64(new Uint8Array(wavAB));
       const takes = loadTakes();
-      const nm = 'Master '+new Date().toLocaleTimeString();
-      takes[nm] = { wavB64:b64, sampleRate: tmp.sampleRate };
+      const nm    = 'Master '+new Date().toLocaleTimeString();
+      takes[nm]   = { wavB64:b64, sampleRate: decoded.sampleRate };
       saveTakes(takes);
-      // Prime granular with this take
-      currentTakeBuffer = tmp;
-      currentTakeName = nm;
+
+      currentTakeBuffer = decoded;
+      currentTakeName   = nm;
       enableGranularButtons();
       refreshTakeList();
       setGranularStatus('Added & loaded "'+nm+'" from main Record');
-    }catch(e){ console.warn('decode/auto-add error', e); }
+    }catch(e){
+      console.warn('decode/auto-add error', e);
+      setGranularStatus('Recording finished, but decode failed');
+    }
+
     // UI feedback off (return to dim)
     const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
     recBtn.classList.remove('recording'); recBtn.classList.add('dim'); recLabel.textContent='Record';
   };
-  mediaRecorder.start(100);
-  recStartTs=performance.now();
-  recInter=setInterval(()=>{
-    const t=((performance.now()-recStartTs)/1000)|0;
-    document.getElementById('recTimer').textContent='REC '+(t/60|0)+':'+String(t%60).padStart(2,'0')+' / '+MAX_REC_S+'s';
-    if(t>=MAX_REC_S) stopTopRecording();
-  },250);
+
+  mediaRecorder.start(100); // keep small timeslice for safety
+  recStartTs = performance.now();
+
+  // Countdown: show “time left / total”
+  recInter = setInterval(()=>{
+    const elapsed = ((performance.now()-recStartTs)/1000)|0;
+    const left    = Math.max(0, MAX_REC_S - elapsed);
+    document.getElementById('recTimer').textContent =
+      'REC '+(left/60|0)+':'+String(left%60).padStart(2,'0')+' left / '+MAX_REC_S+'s';
+    if (elapsed >= MAX_REC_S) stopTopRecording();
+  }, 250);
 }
+
 function stopTopRecording(){
-  if(mediaRecorder&&mediaRecorder.state==='recording'){ try{ mediaRecorder.stop(); }catch{} }
+  if(mediaRecorder && mediaRecorder.state==='recording'){ try{ mediaRecorder.stop(); }catch{} }
   clearInterval(recInter);
   document.getElementById('recTimer').textContent='';
-  // ensure UI unarmed & dim
   const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
   recBtn.classList.remove('recording'); recBtn.classList.add('dim'); recLabel.textContent='Record';
 }
@@ -383,26 +454,54 @@ async function hardResetAudio(){
   synth=null;
 
   grainTicker=null; scanTicker=null; grainActive=null; granularOut=null;
-
   samplerBus={out:null, filter:null};
 
   await ensureAudio();
 }
-function makeDriveCurve(amount=0){ const k=amount*20; const n=44100; const c=new Float32Array(n); for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=(1+k)*x/(1+k*Math.abs(x)); } return c; }
+function makeDriveCurve(amount=0){
+  const k=amount*20; const n=44100; const c=new Float32Array(n);
+  for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=(1+k)*x/(1+k*Math.abs(x)); }
+  return c;
+}
 function makeSynth(a){
   const voices=new Map();
-  const buses = { master: mixNode, filter:a.createBiquadFilter(), shaper:a.createWaveShaper(), dry:a.createGain(), wet:a.createGain(), sum:a.createGain() };
-  buses.dry.gain.value=1; buses.wet.gain.value=0; buses.filter.type='lowpass'; buses.filter.frequency.value=1600; buses.filter.Q.value=0.2; buses.shaper.curve=makeDriveCurve(0);
+  const buses = {
+    master: mixNode,
+    filter:a.createBiquadFilter(),
+    shaper:a.createWaveShaper(),
+    dry:a.createGain(), wet:a.createGain(), sum:a.createGain()
+  };
+  buses.dry.gain.value=1; buses.wet.gain.value=0;
+  buses.filter.type='lowpass'; buses.filter.frequency.value=1600; buses.filter.Q.value=0.2;
+  buses.shaper.curve=makeDriveCurve(0);
   buses.master.connect(buses.dry).connect(buses.sum);
   buses.master.connect(buses.filter).connect(buses.shaper).connect(buses.wet).connect(buses.sum);
   buses.sum.connect(limiter);
+
   const params={shape:'sawtooth', subShape:'off', detune:0, subDetune:0, subLevel:0.8, subOctave:1, noiseColor:'white', cutoff:1600, resonance:0.2, mode:'lp', a:0.01,d:0.08,s:0.6,r:0.15, drive:0, mix:0};
   const shapeMap={saw:'sawtooth',sawtooth:'sawtooth',square:'square',triangle:'triangle',sine:'sine',noise:'noise',off:'off'};
-  function noise(color){ const buffer=a.createBuffer(1, a.sampleRate*2, a.sampleRate); const data=buffer.getChannelData(0); if(color==='pink'){ let b0=0, AA=0.997; for(let i=0;i<data.length;i++){ const w=Math.random()*2-1; b0=AA*b0+(1-AA)*w; data[i]=b0*1.5; } } else { for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1; } const src=a.createBufferSource(); src.buffer=buffer; src.loop=true; return src; }
-  function osc(freq, type){ if(type==='noise') return noise(params.noiseColor||'white'); const o=a.createOscillator(); o.type=type; o.frequency.value=freq; return o; }
+
+  function noise(color){
+    const buffer=a.createBuffer(1, a.sampleRate*2, a.sampleRate);
+    const data=buffer.getChannelData(0);
+    if(color==='pink'){
+      let b0=0, AA=0.997;
+      for(let i=0;i<data.length;i++){ const w=Math.random()*2-1; b0=AA*b0+(1-AA)*w; data[i]=b0*1.5; }
+    } else {
+      for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
+    }
+    const src=a.createBufferSource(); src.buffer=buffer; src.loop=true; return src;
+  }
+  function osc(freq, type){
+    if(type==='noise') return noise(params.noiseColor||'white');
+    const o=a.createOscillator(); o.type=type; o.frequency.value=freq; return o;
+  }
   function env(){ const clamp01=(x)=>Math.max(0,Math.min(1,x)); return { a:Math.max(.001,params.a), d:Math.max(.001,params.d), s:clamp01(params.s), r:Math.max(.001,params.r) }; }
   function apply(name,value){
-    if(name==='shape'||name==='subShape'){ const mapped=shapeMap[String(value)]||String(value); if(name==='shape') params.shape=mapped; else params.subShape=mapped; return; }
+    if(name==='shape'||name==='subShape'){
+      const mapped=shapeMap[String(value)]||String(value);
+      if(name==='shape') params.shape=mapped; else params.subShape=mapped; return;
+    }
     params[name]=value;
     if(name==='cutoff'){ buses.filter.frequency.value=Math.max(50, value|0); }
     if(name==='resonance'){ buses.filter.Q.value=Math.max(0, Math.min(20, (value||0)*20)); }
@@ -410,6 +509,7 @@ function makeSynth(a){
     if(name==='mix'){ const mix=Math.max(0,Math.min(1,value||0)); buses.wet.gain.value=mix; buses.dry.gain.value=1-mix; }
     if(name==='drive'){ buses.shaper.curve = makeDriveCurve(Math.max(0,Math.min(1,value||0))); }
   }
+
   return{
     set:apply,
     setBend(semi){
@@ -426,10 +526,12 @@ function makeSynth(a){
       const existing = voices.get(key);
       const e = env(); const t=a.currentTime; const peak=.28*vel;
       if(existing){
-        try{ existing.g.gain.cancelScheduledValues(t); existing.g.gain.setValueAtTime(1e-5,t);
-             existing.g.gain.linearRampToValueAtTime(peak,t+e.a);
-             existing.g.gain.linearRampToValueAtTime(peak*e.s,t+e.a+e.d);
-             existing.e=e; existing.baseFreq=freq; }catch{}
+        try{
+          existing.g.gain.cancelScheduledValues(t); existing.g.gain.setValueAtTime(1e-5,t);
+          existing.g.gain.linearRampToValueAtTime(peak,t+e.a);
+          existing.g.gain.linearRampToValueAtTime(peak*e.s,t+e.a+e.d);
+          existing.e=e; existing.baseFreq=freq;
+        }catch{}
         try{ this.setBend?.(bendSemis) }catch{};
         return;
       }
@@ -472,11 +574,16 @@ function makeSynth(a){
     }
   };
 }
-function pushParams(){ if(!synth) return;
- ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor']
- .forEach(id=>{ const el=document.getElementById(id); if(!el) return; const val=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value; try{synth.set(id,val)}catch{}; });
+function pushParams(){
+  if(!synth) return;
+  ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor']
+    .forEach(id=>{
+      const el=document.getElementById(id);
+      if(!el) return;
+      const val=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value;
+      try{synth.set(id,val)}catch{};
+    });
 }
-
 /* ===== Presets ===== */
 const PRESET_KEY='stagsynth_presets_v3';
 const PRESET_PARAMS=['shape','subShape','detune','subDetune','subLevel','subOctave','noiseColor','cutoff','resonance','mode','a','d','s','r','drive','mix'];
@@ -506,8 +613,12 @@ function initPresets(){
   delB.onclick=()=>{ const nm=sel.value; delete store[nm]; savePresetStore(store); refresh(); };
   expB.onclick=()=>{ const blob=new Blob([JSON.stringify(store,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='stagsynth-presets.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); };
   impB.onclick=()=>impF.click();
-  impF.onchange=async()=>{ const f=impF.files?.[0]; if(!f) return; try{ const txt=await f.text(); const data=JSON.parse(txt); store={...store,...data}; savePresetStore(store); refresh(); }catch(e){} impF.value=''; };
-  shareB.onclick=async()=>{ const url=location.origin+location.pathname + '#presets=' + b64EncodeUnicode(JSON.stringify(store)); try{ await navigator.clipboard.writeText(url); msg.textContent='Link copied'; setTimeout(()=>msg.textContent='',1200); }catch{ prompt('Copy URL', url); } };
+  impF.onchange=async()=>{ const f=impF.files?.[0]; if(!f) return; try{ const txt=await f.text(); const data=JSON.parse(txt); store={...store,...data}; savePresetStore(store); refresh(); }catch(e){} impF.value='';
+  };
+  shareB.onclick=async()=>{
+    const url=location.origin+location.pathname + '#presets=' + b64EncodeUnicode(JSON.stringify(store));
+    try{ await navigator.clipboard.writeText(url); msg.textContent='Link copied'; setTimeout(()=>msg.textContent='',1200); }catch{ prompt('Copy URL', url); }
+  };
 }
 
 /* ===== Keypad, micro, bend ===== */
@@ -790,15 +901,31 @@ function bindSamplerPanel(){
     document.getElementById('sam_name').value=samplerCurrent.name; document.getElementById('sam_save').disabled=false; setSamStatus('Loaded from granular');
   };
   document.getElementById('sam_import').onclick=()=>document.getElementById('sam_file').click();
-  document.getElementById('sam_file').onchange=async(e)=>{ const f=e.target.files?.[0]; if(!f) return; const arr=await f.arrayBuffer(); await ensureAudio(); initSamplerBus(); const ab=await audioCtx.decodeAudioData(arr.slice(0)); samplerCurrent={ name:f.name.replace(/\.[^/.]+$/,''), buffer:ab, root:parseInt(document.getElementById('sam_root').value||'60')|0 }; document.getElementById('sam_name').value=samplerCurrent.name; document.getElementById('sam_save').disabled=false; refreshSamplerList(); setSamStatus('Imported '+samplerCurrent.name); e.target.value=''; };
+  document.getElementById('sam_file').onchange=async(e)=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    const arr=await f.arrayBuffer(); await ensureAudio(); initSamplerBus();
+    const ab=await audioCtx.decodeAudioData(arr.slice(0));
+    samplerCurrent={ name:f.name.replace(/\.[^/.]+$/,''), buffer:ab, root:parseInt(document.getElementById('sam_root').value||'60')|0 };
+    document.getElementById('sam_name').value=samplerCurrent.name; document.getElementById('sam_save').disabled=false;
+    refreshSamplerList(); setSamStatus('Imported '+samplerCurrent.name); e.target.value='';
+  };
   document.getElementById('sam_save').onclick=()=>{
     if(!samplerCurrent.buffer) return; const nm=(document.getElementById('sam_name').value||'Sample').trim(); const root=parseInt(document.getElementById('sam_root').value||'60')|0;
     const wav=encodeWAVFromBuffer(samplerCurrent.buffer); const b64=u8ToB64(new Uint8Array(wav));
     samplerLib[nm]={ wavB64:b64, sampleRate:samplerCurrent.buffer.sampleRate, root }; saveSamplerLib(); refreshSamplerList(nm); setSamStatus('Saved "'+nm+'"');
   };
   document.getElementById('sam_delete').onclick=()=>{ const nm=list.value; if(!nm) return; delete samplerLib[nm]; saveSamplerLib(); refreshSamplerList(); setSamStatus('Deleted '+nm); };
-  document.getElementById('sam_export').onclick=()=>{ const nm=list.value; const rec=samplerLib[nm]; if(!rec) return; const bin=atob(rec.wavB64); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i); const blob=new Blob([u8.buffer],{type:'audio/wav'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=(nm||'sample')+'.wav'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); };
-  ['sam_gain','sam_cut','sam_q'].forEach(id=> document.getElementById(id)?.addEventListener('input', ()=>{ if(!audioCtx) return; initSamplerBus(); if(id==='sam_gain') samplerBus.out.gain.value=parseFloat(document.getElementById('sam_gain').value||'0.9'); if(id==='sam_cut') samplerBus.filter.frequency.value=Math.max(60,parseFloat(document.getElementById('sam_cut').value||'10000')); if(id==='sam_q') samplerBus.filter.Q.value=Math.max(0,Math.min(20,parseFloat(document.getElementById('sam_q').value||'0')*20)); }));
+  document.getElementById('sam_export').onclick=()=>{
+    const nm=list.value; const rec=samplerLib[nm]; if(!rec) return;
+    const bin=atob(rec.wavB64); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+    const blob=new Blob([u8.buffer],{type:'audio/wav'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=(nm||'sample')+'.wav'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  ['sam_gain','sam_cut','sam_q'].forEach(id=> document.getElementById(id)?.addEventListener('input', ()=>{
+    if(!audioCtx) return; initSamplerBus();
+    if(id==='sam_gain') samplerBus.out.gain.value=parseFloat(document.getElementById('sam_gain').value||'0.9');
+    if(id==='sam_cut')  samplerBus.filter.frequency.value=Math.max(60,parseFloat(document.getElementById('sam_cut').value||'10000'));
+    if(id==='sam_q')    samplerBus.filter.Q.value=Math.max(0,Math.min(20,parseFloat(document.getElementById('sam_q').value||'0')*20));
+  }));
 }
 function samplerEnv(){ const clamp01=x=>Math.max(0,Math.min(1,x)); return { a:Math.max(.001,parseFloat(document.getElementById('sam_a').value||'0.005')), d:Math.max(.001,parseFloat(document.getElementById('sam_d').value||'0.08')), s:clamp01(parseFloat(document.getElementById('sam_s').value||'0.8')), r:Math.max(.001,parseFloat(document.getElementById('sam_r').value||'0.2')) }; }
 function samplerMode(){ const sel=document.getElementById('sam_mode'); return sel? sel.value : 'off'; }
@@ -864,3 +991,4 @@ document.addEventListener('DOMContentLoaded', main);
 </script>
 </body>
 </html>
+
