@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>StagSynth — v9 FX Mobile</title>
+<title>StagSynth — v10 FX Neutral + iOS Chrome Fix</title>
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="%23ff2727" stroke-width="6"/><text x="32" y="42" text-anchor="middle" font-size="32" fill="%23ff2727">🦉</text></svg>' />
 <style>
 /* ===== Theme ===== */
@@ -159,44 +159,44 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <label>Resonance <input type="range" id="resonance" data-midicc min="0" max="1" step="0.01" value="0.2"/></label>
   </div>
 
-  <!-- ===== FULL FX SUITE ===== -->
+  <!-- ===== FULL FX SUITE (all neutral on load) ===== -->
   <div class="section" id="fxSuite">
     <h4>FX Suite</h4>
 
-    <!-- Reverb -->
+    <!-- Reverb (neutral = MIX 0) -->
     <label>Reverb Room Size <input type="range" id="fx_rev_room" data-midicc min="0.1" max="1.0" step="0.01" value="0.6"/></label>
     <label>Reverb Decay (s) <input type="range" id="fx_rev_decay" data-midicc min="0.2" max="12" step="0.1" value="3.0"/></label>
     <label>Reverb Pre-delay (ms) <input type="range" id="fx_rev_predelay" data-midicc min="0" max="200" step="1" value="20"/></label>
     <label>Reverb Damping (Hz) <input type="range" id="fx_rev_damp" data-midicc min="1000" max="20000" step="10" value="6000"/></label>
-    <label>Reverb Mix <input type="range" id="fx_rev_mix" data-midicc min="0" max="1" step="0.01" value="0.15"/></label>
+    <label>Reverb Mix <input type="range" id="fx_rev_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
 
-    <!-- Chorus -->
+    <!-- Chorus (neutral = MIX 0) -->
     <label>Chorus Rate (Hz) <input type="range" id="fx_ch_rate" data-midicc min="0.05" max="8" step="0.01" value="1.0"/></label>
     <label>Chorus Depth (ms) <input type="range" id="fx_ch_depth" data-midicc min="0" max="20" step="0.1" value="6"/></label>
     <label>Chorus Voices <input type="number" id="fx_ch_voices" min="1" max="4" step="1" value="2"/></label>
     <label>Stereo Width <input type="range" id="fx_ch_width" data-midicc min="0" max="1" step="0.01" value="0.8"/></label>
-    <label>Chorus Mix <input type="range" id="fx_ch_mix" data-midicc min="0" max="1" step="0.01" value="0.25"/></label>
+    <label>Chorus Mix <input type="range" id="fx_ch_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
 
-    <!-- Compressor -->
-    <label>Comp Threshold (dB) <input type="range" id="fx_comp_thr" data-midicc min="-60" max="0" step="1" value="-18"/></label>
-    <label>Comp Ratio <input type="range" id="fx_comp_ratio" data-midicc min="1" max="20" step="0.1" value="4"/></label>
+    <!-- Compressor (neutral = ratio 1, makeup 0, threshold 0) -->
+    <label>Comp Threshold (dB) <input type="range" id="fx_comp_thr" data-midicc min="-60" max="0" step="1" value="0"/></label>
+    <label>Comp Ratio <input type="range" id="fx_comp_ratio" data-midicc min="1" max="20" step="0.1" value="1"/></label>
     <label>Comp Attack (ms) <input type="range" id="fx_comp_att" data-midicc min="0.1" max="200" step="0.1" value="5"/></label>
     <label>Comp Release (ms) <input type="range" id="fx_comp_rel" data-midicc min="10" max="1000" step="1" value="200"/></label>
     <label>Makeup Gain <input type="range" id="fx_comp_makeup" data-midicc min="0" max="12" step="0.1" value="0"/></label>
 
-    <!-- Bitcrusher -->
-    <label>Bit Depth <input type="range" id="fx_bc_bits" data-midicc min="1" max="24" step="1" value="12"/></label>
-    <label>Downsample (Hz) <input type="range" id="fx_bc_rate" data-midicc min="100" max="48000" step="50" value="12000"/></label>
+    <!-- Bitcrusher (neutral = MIX 0, hi-res & full rate) -->
+    <label>Bit Depth <input type="range" id="fx_bc_bits" data-midicc min="1" max="24" step="1" value="24"/></label>
+    <label>Downsample (Hz) <input type="range" id="fx_bc_rate" data-midicc min="100" max="48000" step="50" value="48000"/></label>
     <label>Bitcrusher Mix <input type="range" id="fx_bc_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
 
-    <!-- Ring Mod -->
+    <!-- Ring Mod (neutral = MIX 0 and Depth 0) -->
     <label>Ring Carrier Freq (Hz) <input type="range" id="fx_rm_freq" data-midicc min="0.1" max="20000" step="0.1" value="30"/></label>
     <label>Ring Carrier Wave
       <select id="fx_rm_wave" data-midicc>
         <option>sine</option><option>triangle</option><option>square</option><option>sawtooth</option>
       </select>
     </label>
-    <label>Ring Depth <input type="range" id="fx_rm_depth" data-midicc min="0" max="1.5" step="0.01" value="1.0"/></label>
+    <label>Ring Depth <input type="range" id="fx_rm_depth" data-midicc min="0" max="1.5" step="0.01" value="0.0"/></label>
     <label>Ring Mix <input type="range" id="fx_rm_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
 
     <!-- Original color bus -->
@@ -220,7 +220,6 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     </div>
   </div>
 </div>
-
 <!-- Granular panel -->
 <div id="granularPanel" class="synth-panel" role="region" aria-label="Granular controls">
   <div class="section">
@@ -350,6 +349,7 @@ let recChunks=[], recStartTs=0, recInter=null; const MAX_REC_S=15;
 const TAKES_KEY='stagsynth_takes_v5';
 function loadTakes(){ try{ return JSON.parse(localStorage.getItem(TAKES_KEY)||'{}'); }catch{return{}} }
 function saveTakes(o){ try{ localStorage.setItem(TAKES_KEY, JSON.stringify(o)); }catch{} }
+
 /* ===== Setup / teardown ===== */
 function setupRecordingBus(){
   const a=audioCtx;
@@ -530,8 +530,8 @@ async function initBitcrusherWorklet(ctx){
       class BitcrusherProcessor extends AudioWorkletProcessor{
         static get parameterDescriptors(){
           return [
-            { name:'bits', defaultValue:12, minValue:1, maxValue:24, automationRate:'k-rate' },
-            { name:'downRate', defaultValue:12000, minValue:50, maxValue:96000, automationRate:'k-rate' }
+            { name:'bits', defaultValue:24, minValue:1, maxValue:24, automationRate:'k-rate' },
+            { name:'downRate', defaultValue:48000, minValue:50, maxValue:96000, automationRate:'k-rate' }
           ];
         }
         constructor(){ super(); this._phase=0; this._lastL=0; this._lastR=0; }
@@ -539,9 +539,9 @@ async function initBitcrusherWorklet(ctx){
           const input = inputs[0], output = outputs[0];
           if(!input || !input[0] || !output || !output[0]) return true;
           const inL=input[0], inR=input[1]||input[0], outL=output[0], outR=output[1]||output[0];
-          const bits = params.bits[0];
-          const step = Math.max(1, Math.floor(sampleRate / Math.max(50, params.downRate[0]||12000)));
-          const levels = Math.max(1, (1<<Math.max(1,Math.min(24, bits))));
+          const bits = Math.max(1, Math.min(24, params.bits[0]|0));
+          const step = Math.max(1, Math.floor(sampleRate / Math.max(50, params.downRate[0]||48000)));
+          const levels = Math.max(2, (1<<bits));
           const q = 2/levels; // quantization step over [-1..1]
           for(let i=0;i<outL.length;i++){
             if(this._phase===0){
@@ -564,7 +564,7 @@ async function initBitcrusherWorklet(ctx){
   }
 }
 
-/* ===== Synth engine with FX Suite ===== */
+/* ===== Synth engine with FX Suite (neutral by default) ===== */
 let synth=null;
 function makeSynth(a){
   const voices=new Map();
@@ -583,22 +583,22 @@ function makeSynth(a){
   // --- FX: nodes & mixers
   // Ring mod
   const rmCarrier = a.createOscillator(); rmCarrier.type='sine'; rmCarrier.frequency.value=30;
-  const rmDepth = a.createGain(); rmDepth.gain.value=1.0;
+  const rmDepth = a.createGain(); rmDepth.gain.value=0.0; // neutral depth
   const ringGain = a.createGain(); ringGain.gain.value=0.0; // carrier drives this gain param
   rmCarrier.connect(rmDepth).connect(ringGain.gain);
 
-  const ringWet = a.createGain(); ringWet.gain.value=0.0; // ring mix
+  const ringWet = a.createGain(); ringWet.gain.value=0.0; // ring mix neutral
   const ringDry = a.createGain(); ringDry.gain.value=1.0;
 
   // Chorus: L/R delays modulated by LFOs
   const chIn = a.createGain(); const chOut = a.createGain();
   const chDry = a.createGain(); chDry.gain.value=1.0;
-  const chWet = a.createGain(); chWet.gain.value=0.0;
+  const chWet = a.createGain(); chWet.gain.value=0.0; // neutral
   const chDelayL = a.createDelay(0.05), chDelayR = a.createDelay(0.05);
   const chLFO1 = a.createOscillator(), chLFO2 = a.createOscillator();
   const chDepthL = a.createGain(), chDepthR = a.createGain();
   chLFO1.type='sine'; chLFO2.type='sine';
-  chDepthL.gain.value = 0.006;  // ~6ms default
+  chDepthL.gain.value = 0.006;  // ~6ms default depth (inactive when mix=0)
   chDepthR.gain.value = 0.006;
   chLFO1.connect(chDepthL).connect(chDelayL.delayTime);
   chLFO2.connect(chDepthR).connect(chDelayR.delayTime);
@@ -607,15 +607,26 @@ function makeSynth(a){
   chIn.connect(chDry);
   chDry.connect(chOut); chWet.connect(chOut);
 
-  // Bitcrusher (worklet) + mix
-  const bcIn = a.createGain(), bcOut = a.createGain();
-  const bcDry = a.createGain(); bcDry.gain.value=1.0;
-  const bcWet = a.createGain(); bcWet.gain.value=0.0;
+  // Bitcrusher (worklet) + mix (clean sum)
+  const bcIn  = a.createGain();
+  const bcDry = a.createGain(); bcDry.gain.value = 1.0;
+  const bcWet = a.createGain(); bcWet.gain.value = 0.0;  // neutral
+  const bcSum = a.createGain();
+  bcIn.connect(bcDry);
+  bcDry.connect(bcSum);
+  (async ()=>{
+    await initBitcrusherWorklet(a);
+    const node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
+    bitcrusherNode = node;
+    bitcrusherMix  = { dry: bcDry, wet: bcWet };
+    bcIn.connect(node).connect(bcWet);
+    bcWet.connect(bcSum);
+  })();
 
   // Reverb: predelay → convolver → damping LPF → mix
   const revIn = a.createGain(), revOut = a.createGain();
   const revDry = a.createGain(); revDry.gain.value=1.0;
-  const revWet = a.createGain(); revWet.gain.value=0.0;
+  const revWet = a.createGain(); revWet.gain.value=0.0; // neutral
   const revPre = a.createDelay(0.25);
   const revConv = a.createConvolver();
   const revDamp = a.createBiquadFilter(); revDamp.type='lowpass'; revDamp.frequency.value=6000;
@@ -644,43 +655,29 @@ function makeSynth(a){
   ringMix.connect(chIn);
   chOut.connect(bcIn);
 
-  bcIn.connect(bcDry);
-  bcIn.connect(bcOut); // placeholder; worklet will replace bcOut path
-  bcDry.connect(revIn);
-  bcOut.connect(revIn);
-  bcDry.connect(revDry);
-  bcOut.connect(revWet);
+  // bcSum proceeds to reverb input
+  bcSum.connect(revIn);
 
   revOut.connect(comp).connect(makeup).connect(limiter);
 
   // Start carriers/LFOs
   try{ rmCarrier.start(); chLFO1.start(); chLFO2.start(); }catch{}
 
-  // Prepare bitcrusher worklet node
-  (async ()=>{
-    await initBitcrusherWorklet(a);
-    const node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
-    bitcrusherNode = node;
-    bitcrusherMix = { dry: bcDry, wet: bcWet };
-    // route bcIn → node → bcWet
-    bcIn.connect(node).connect(bcWet);
-  })();
-
-  // --- Params & helpers
+  // --- Params & helpers (neutral FX) ---
   const params={
     // color bus (kept from your original)
     cutoff:1600,resonance:0.2,mode:'lp', drive:0, mix:0,
     // reverb
-    fx_rev_room:0.6, fx_rev_decay:3.0, fx_rev_predelay:0.02, fx_rev_damp:6000, fx_rev_mix:0.15,
+    fx_rev_room:0.6, fx_rev_decay:3.0, fx_rev_predelay:0.02, fx_rev_damp:6000, fx_rev_mix:0.0,
     // chorus
-    fx_ch_rate:1.0, fx_ch_depth:0.006, fx_ch_voices:2, fx_ch_width:0.8, fx_ch_mix:0.25,
-    // comp
-    fx_comp_thr:-18, fx_comp_ratio:4, fx_comp_att:0.005, fx_comp_rel:0.2, fx_comp_makeup:0,
-    // bitcrusher
-    fx_bc_bits:12, fx_bc_rate:12000, fx_bc_mix:0.0,
-    // ring
-    fx_rm_freq:30, fx_rm_wave:'sine', fx_rm_depth:1.0, fx_rm_mix:0.0,
-    // osc/envelope defaults (set from UI on push)
+    fx_ch_rate:1.0, fx_ch_depth:0.006, fx_ch_voices:2, fx_ch_width:0.8, fx_ch_mix:0.0,
+    // comp (neutral)
+    fx_comp_thr:0, fx_comp_ratio:1, fx_comp_att:0.005, fx_comp_rel:0.2, fx_comp_makeup:0,
+    // bitcrusher (neutral)
+    fx_bc_bits:24, fx_bc_rate:48000, fx_bc_mix:0.0,
+    // ring (neutral)
+    fx_rm_freq:30, fx_rm_wave:'sine', fx_rm_depth:0.0, fx_rm_mix:0.0,
+    // osc/envelope defaults
     shape:'sawtooth', subShape:'off', detune:0, subDetune:0, subLevel:0.8, subOctave:1, noiseColor:'white',
     a:0.01,d:0.08,s:0.6,r:0.15
   };
@@ -728,12 +725,15 @@ function makeSynth(a){
   }
 
   function setBitcrusher(){
+    const sr = a.sampleRate || 48000;
+    const rate = Math.max(50, Math.min(sr, params.fx_bc_rate || sr));
+    const bits = Math.max(1, Math.min(24, params.fx_bc_bits || 24));
     if(bitcrusherNode){
-      bitcrusherNode.parameters.get('bits')?.setValueAtTime(params.fx_bc_bits, a.currentTime);
-      bitcrusherNode.parameters.get('downRate')?.setValueAtTime(params.fx_bc_rate, a.currentTime);
-      bcWet.gain.value = params.fx_bc_mix;
-      bcDry.gain.value = 1 - params.fx_bc_mix;
+      bitcrusherNode.parameters.get('bits')?.setValueAtTime(bits, a.currentTime);
+      bitcrusherNode.parameters.get('downRate')?.setValueAtTime(rate, a.currentTime);
     }
+    bcWet.gain.value = Math.max(0, Math.min(1, params.fx_bc_mix || 0));
+    bcDry.gain.value = 1 - bcWet.gain.value;
   }
 
   function setCompressor(){
@@ -746,7 +746,8 @@ function makeSynth(a){
 
   setReverb(); setChorus(); setRing(); setCompressor();
   (async()=>{ await initBitcrusherWorklet(a); setBitcrusher(); })();
-  // ===== Voice helpers (kept from earlier build) =====
+
+  // ===== Voice helpers =====
   const shapeMap={saw:'sawtooth',sawtooth:'sawtooth',square:'square',triangle:'triangle',sine:'sine',noise:'noise',off:'off'};
   function noise(color){
     const buffer=a.createBuffer(1, a.sampleRate*2, a.sampleRate);
@@ -760,12 +761,11 @@ function makeSynth(a){
 
   return{
     set(name,value){
-      // store then fan-out to handlers
       if(name==='shape'||name==='subShape'){ /* applied in voice creation */ }
       this._params = this._params||{};
       this._params[name]=value;
 
-      // map to master/color
+      // color bus
       if(name==='cutoff'){ buses.colorFilter.frequency.value=Math.max(50, value|0); }
       if(name==='resonance'){ buses.colorFilter.Q.value=Math.max(0, Math.min(20, (value||0)*20)); }
       if(name==='mode'){ buses.colorFilter.type=(value==='hp')?'highpass':(value==='bp')?'bandpass':'lowpass'; }
@@ -1024,6 +1024,7 @@ function attachLearnClicks(){
     });
   });
 }
+
 /* ===== Granular ===== */
 let currentTakeBuffer=null, currentTakeName='';
 let grainTicker=null, scanTicker=null, grainActive=null;
@@ -1276,8 +1277,9 @@ function bindMain(){
   ].forEach(id=> document.getElementById(id)?.addEventListener('input',pushParams));
   attachLearnClicks();
 }
-function main(){ loadPresetStore(); loadTakes(); bindHeader(); bindMain(); initPresets(); bindGranularPanel(); bindSamplerPanel(); }
+function main(){ loadPresetStore(); loadTakes(); bindHeader(); bindMain(); initPresets(); bindGranularPanel(); bindSamplerPanel(); loadMidiMap(); }
 document.addEventListener('DOMContentLoaded', main);
 </script>
 </body>
 </html>
+
