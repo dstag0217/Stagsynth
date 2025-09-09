@@ -3,29 +3,64 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>StagSynth — v8g16</title>
+<title>StagSynth — v8g17</title>
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="%23ff2727" stroke-width="6"/><text x="32" y="42" text-anchor="middle" font-size="32" fill="%23ff2727">🦉</text></svg>' />
 <style>
-:root{--bg1:#2b0000;--bg2:#060004;--panel:#0e0a0a;--panel2:#1a1212;--border:#3a2323;--fg:#f7e9e9;--dim:#c99a9a;--accent:#ff2727;--green:#25ff85;--warn:#ff844a;--chevron1:#0b0b0b;--chevron2:#1c1c1c}
+/* ===== Twin Peaks Theme (unchanged) ===== */
+:root{
+  --bg1:#2b0000; --bg2:#060004;
+  --panel:#0e0a0a; --panel2:#1a1212;
+  --border:#3a2323; --fg:#f7e9e9; --dim:#c99a9a;
+  --accent:#ff2727; --green:#25ff85; --warn:#ff844a;
+  --chevron1:#0b0b0b; --chevron2:#1c1c1c;
+  --tb: 60px; /* measured in JS */
+}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px;position:sticky;top:0;z-index:50;background:
-  radial-gradient(1200px 220px at 50% -60px,#5d0a0a55,transparent 70%),
+
+/* ===== Topbar (mobile compact) ===== */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;
+  padding:10px 12px;position:sticky;top:0;z-index:50;background:
+  radial-gradient(1200px 220px at 50% -60px, #5d0a0a55, transparent 70%),
   linear-gradient(180deg,rgba(43,0,0,.95),rgba(6,0,4,.65) 85%,transparent);
-  border-bottom:1px solid rgba(255,255,255,.06)}
+  border-bottom:1px solid rgba(255,255,255,.06)
+}
 h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
-.synth-btn{background:
-  linear-gradient(180deg,rgba(255,255,255,.04),transparent),
-  linear-gradient(180deg,var(--panel),var(--panel2));
-  border:1px solid var(--border);color:var(--fg);padding:8px 12px;border-radius:999px;cursor:pointer;
+.tb-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+.synth-btn{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.04),transparent),
+    linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--border);color:var(--fg);
+  padding:8px 12px;border-radius:999px;cursor:pointer;
   box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 8px 20px rgba(0,0,0,.25);
-  transition:box-shadow .15s ease, transform .05s ease, opacity .15s ease}
+  transition:box-shadow .15s ease, transform .05s ease, opacity .15s ease;
+  font-size:14px; line-height:1; min-height:34px;
+}
 .synth-btn:hover{box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 8px 20px rgba(0,0,0,.25),0 0 0 3px rgba(255,39,39,.12)}
 .synth-btn:active{transform:translateY(1px)}
 .synth-btn[disabled]{opacity:.45;cursor:not-allowed}
-.pill{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:linear-gradient(180deg,var(--panel),var(--panel2))}
+.pill{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:linear-gradient(180deg,var(--panel),var(--panel2));display:inline-flex;align-items:center}
 .badge{font-size:12px;opacity:.9;margin-left:8px}
 .warn{color:var(--warn)}
+
+/* Compact sizing for small screens */
+@media (max-width: 480px){
+  h1{font-size:14px}
+  .tb-row{gap:6px}
+  .synth-btn{padding:6px 9px;font-size:12px;min-height:30px}
+  .pill{padding:5px 8px}
+}
+
+/* Record visual feedback */
+#recDot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff2727;margin-right:6px;box-shadow:0 0 8px rgba(255,39,39,.6)}
+@keyframes pulse{0%{transform:scale(1);box-shadow:0 0 6px rgba(255,39,39,.6)}50%{transform:scale(1.2);box-shadow:0 0 14px rgba(255,39,39,.9)}100%{transform:scale(1);box-shadow:0 0 6px rgba(255,39,39,.6)}}
+.pill.recording{background:linear-gradient(180deg,#3b0a0a,#1a0b0b);border-color:#6b1f1f;box-shadow:0 0 0 2px rgba(255,39,39,.18) inset,0 0 18px rgba(255,39,39,.22)}
+.pill.recording #recDot{animation:pulse 0.9s infinite}
+
+/* App & keypad */
 .app{max-width:1000px;margin:0 auto;padding:12px 12px 96px}
 .keypad-wrap{border:1px solid var(--border);border-radius:14px;padding:10px;background:
   repeating-linear-gradient(135deg,var(--chevron1) 0 14px,var(--chevron2) 14px 28px),
@@ -38,16 +73,26 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .key.on{outline:2px solid var(--accent);box-shadow:0 0 18px rgba(255,39,39,.35),inset 0 1px 0 rgba(255,255,255,.04)}
 .controls{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap}
 .readout{width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--border);border-radius:10px;background:#0b0a0b;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
-.wheel{width:64px;height:64px;border-radius:999px;border:2px solid var(--border);background:radial-gradient(circle at 30% 30%,#3a1212,#0b0a0b);position:relative;box-shadow:inset 0 0 10px #0006;touch-action:none;cursor:grab}
+.wheel{width:64px;height:64px;border-radius:999px;border:2px solid var(--border);background:radial-gradient(circle at 30% 30%, #3a1212, #0b0a0b);position:relative;box-shadow:inset 0 0 10px #0006;touch-action:none;cursor:grab}
 .wheel .center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:2px;height:84%;background:#3a2323;opacity:.85}
 .wheel .marker{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:10px;height:22px;border-radius:4px;background:#ffe9e9;opacity:.95;box-shadow:0 0 10px rgba(255,255,255,.25)}
 .owl{width:42px;height:42px;display:grid;place-items:center;border-color:#14532d}
 .owl.micro-on{outline:2px solid var(--green);box-shadow:0 0 14px #25ff8570}
-.synth-panel{position:fixed;top:0;left:0;right:0;transform:translateY(-100%);transition:transform .25s ease;background:#0a0507ea;color:var(--fg);z-index:45;padding:12px;backdrop-filter:blur(8px);max-height:75vh;overflow:auto;border-bottom:1px solid var(--border)}
+
+/* ===== Panels: always reachable on mobile ===== */
+.synth-panel{
+  position:fixed; left:0; right:0;
+  top:var(--tb); height:calc(100vh - var(--tb));
+  transform:translateY(-120%); transition:transform .25s ease;
+  background:#0a0507ea;color:var(--fg);z-index:45;padding:12px;backdrop-filter:blur(8px);
+  overflow:auto; overscroll-behavior:contain;
+  border-bottom:1px solid var(--border); border-top:1px solid rgba(255,255,255,.06);
+}
 .synth-panel.open{transform:translateY(0)}
 .section{display:grid;grid-template-columns:170px 1fr;gap:8px 12px;padding:10px 0;border-top:1px solid var(--border)}
 .section h4{grid-column:1 / -1;margin:.25rem 0;opacity:.95;letter-spacing:.04em}
 @media (max-width:700px){.section{grid-template-columns:1fr}}
+
 .footer{position:fixed;bottom:0;left:0;right:0;padding:8px 12px;font-size:12px;opacity:.85;background:linear-gradient(0deg,#2b0000,transparent)}
 .midi-learn-on{outline:2px solid var(--accent)}
 .kv{display:flex;gap:6px;align-items:center}
@@ -55,24 +100,26 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 </style>
 </head>
 <body>
-<header class="topbar">
+<header class="topbar" id="topbar">
   <h1>StagSynth</h1>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-    <button id="startBtn" class="synth-btn">Start Audio</button>
-    <button id="resetBtn" class="synth-btn">Reset Audio</button>
-    <button id="midiBtn" class="synth-btn">𝄞 MIDI</button>
-    <button id="midiLearnBtn" class="synth-btn" disabled>MIDI Map</button>
+  <div class="tb-row">
+    <button id="startBtn" class="synth-btn" title="Start or Resume Audio">Start Audio</button>
+    <button id="resetBtn" class="synth-btn" title="Reset Audio Engine (close & reinit)">Reset Audio</button>
+    <button id="midiBtn" class="synth-btn" title="Connect MIDI (USB/BLE)">𝄞 MIDI</button>
+    <button id="midiLearnBtn" class="synth-btn" title="MIDI CC Learn" disabled>MIDI Map</button>
     <button id="synthToggle" class="synth-btn" aria-expanded="false" aria-controls="synthPanel">Synth</button>
     <button id="granularToggle" class="synth-btn" aria-expanded="false" aria-controls="granularPanel">Granular</button>
     <button id="samplerToggle" class="synth-btn" aria-expanded="false" aria-controls="samplerPanel">Sampler</button>
     <div style="display:flex;gap:6px;align-items:center">
-      <button id="recBtn" class="pill"><span id="recDot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff2727;margin-right:6px;box-shadow:0 0 8px rgba(255,39,39,.6)"></span>Record</button>
+      <button id="recBtn" class="pill" title="Record short take (whole output)">
+        <span id="recDot"></span> <span id="recLabel">Record</span>
+      </button>
       <span id="recTimer" class="badge" aria-live="polite"></span>
     </div>
   </div>
 </header>
 
-<!-- Synth panel -->
+<!-- Synth panel (unchanged content) -->
 <div id="synthPanel" class="synth-panel" role="region" aria-label="Synth controls">
   <div class="section">
     <h4>Oscillators</h4>
@@ -255,6 +302,9 @@ function startTopRecording(){
   const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm';
   mediaRecorder=new MediaRecorder(mediaStreamDest.stream,{mimeType:mime,audioBitsPerSecond:128000});
   recChunks=[];
+  // UI feedback on
+  const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
+  recBtn.classList.add('recording'); recLabel.textContent='Stop';
   mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recChunks.push(e.data); };
   mediaRecorder.onstop=async()=>{
     try{
@@ -268,12 +318,16 @@ function startTopRecording(){
       const nm = 'Master '+new Date().toLocaleTimeString();
       takes[nm] = { wavB64:b64, sampleRate: tmp.sampleRate };
       saveTakes(takes);
+      // Directly prime granular with this take
       currentTakeBuffer = tmp;
       currentTakeName = nm;
       enableGranularButtons();
       refreshTakeList();
       setGranularStatus('Added & loaded "'+nm+'" from main Record');
     }catch(e){ console.warn('decode/auto-add error', e); }
+    // UI feedback off
+    const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
+    recBtn.classList.remove('recording'); recLabel.textContent='Record';
   };
   mediaRecorder.start(100);
   recStartTs=performance.now();
@@ -282,13 +336,14 @@ function startTopRecording(){
     document.getElementById('recTimer').textContent='REC '+(t/60|0)+':'+String(t%60).padStart(2,'0')+' / '+MAX_REC_S+'s';
     if(t>=MAX_REC_S) stopTopRecording();
   },250);
-  document.getElementById('recBtn').textContent='Stop';
 }
 function stopTopRecording(){
   if(mediaRecorder&&mediaRecorder.state==='recording'){ try{ mediaRecorder.stop(); }catch{} }
   clearInterval(recInter);
   document.getElementById('recTimer').textContent='';
-  document.getElementById('recBtn').textContent='Record';
+  // ensure UI unarmed
+  const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
+  recBtn.classList.remove('recording'); recLabel.textContent='Record';
 }
 
 /* ===== Synth engine ===== */
@@ -303,7 +358,7 @@ function ensureAudio(){
   return Promise.resolve(true);
 }
 async function hardResetAudio(){
-  // Full kill, including sampler/granular buses, so next play is clean.
+  // Full kill, including sampler/granular, so next play is clean.
   try{ stopTopRecording(); }catch{}
   try{ stopGranular(true); }catch{}
   try{ killSamplerAll(); }catch{}
@@ -317,10 +372,10 @@ async function hardResetAudio(){
 
   grainTicker=null; scanTicker=null; grainActive=null; granularOut=null;
 
-  // 🚑 key fix: drop stale sampler bus references so initSamplerBus() rebuilds on next note
+  // drop stale sampler bus so it rebuilds on next use
   samplerBus={out:null, filter:null};
 
-  await ensureAudio(); // immediately ready after reset
+  await ensureAudio(); // immediately usable after reset
 }
 function makeDriveCurve(amount=0){ const k=amount*20; const n=44100; const c=new Float32Array(n); for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=(1+k)*x/(1+k*Math.abs(x)); } return c; }
 function makeSynth(a){
@@ -613,7 +668,7 @@ function startGranular(){
   if(!currentTakeBuffer||!audioCtx){ setGranularStatus('No take'); return; }
   stopGranular(true);
   granularOut=audioCtx.createGain(); granularOut.gain.value=parseFloat(g['g_gain'].value||'0.7');
-  granularOut.connect(mixNode); // single route to mix (record/limit once)
+  granularOut.connect(mixNode); // record/limit once
 
   grainActive=new Set();
   let posPct=(parseFloat(g['g_pos'].value)||0)/100;
@@ -704,7 +759,7 @@ async function samplerLoadByName(nm){
 }
 function initSamplerBus(){
   if(!audioCtx) return;
-  // if out exists but belongs to a closed context, rebuild anyway
+  // If a stale bus exists from an old context, drop it
   try{ if(samplerBus.out && samplerBus.out.context !== audioCtx) samplerBus={out:null,filter:null}; }catch{}
   if(samplerBus.out) return;
   const out=audioCtx.createGain(); out.gain.value=parseFloat(document.getElementById('sam_gain').value||'0.9');
@@ -767,7 +822,14 @@ function routeNoteOn(m,amp){ ensureAudio().then(()=>{ const mode=samplerMode(); 
 function routeNoteOff(m){ try{ const mode=samplerMode(); if(mode==='sampler'||mode==='both') samplerNoteOff(m); if(mode!=='sampler') synth?.noteOff(m); }catch{} }
 
 /* ===== Header & main ===== */
+function measureTopbar(){
+  const tb=document.getElementById('topbar');
+  const h=tb ? tb.getBoundingClientRect().height : 60;
+  document.documentElement.style.setProperty('--tb', Math.round(h)+'px');
+}
 function bindHeader(){
+  measureTopbar();
+  window.addEventListener('resize', measureTopbar);
   document.getElementById('startBtn').onclick=()=>ensureAudio();
   document.getElementById('resetBtn').onclick=()=>hardResetAudio();
   document.getElementById('midiBtn').onclick=()=>ensureAudio().then(connectMIDI);
@@ -789,7 +851,7 @@ function bindMain(){
   attachLearnClicks();
 }
 function main(){ loadPresetStore(); loadTakes(); bindHeader(); bindMain(); initPresets(); bindGranularPanel(); bindSamplerPanel(); }
-main();
+document.addEventListener('DOMContentLoaded', main);
 </script>
 </body>
 </html>
