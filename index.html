@@ -3,22 +3,22 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>StagSynth — v8g17</title>
+<title>StagSynth — v8g18</title>
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="%23ff2727" stroke-width="6"/><text x="32" y="42" text-anchor="middle" font-size="32" fill="%23ff2727">🦉</text></svg>' />
 <style>
-/* ===== Twin Peaks Theme (unchanged) ===== */
+/* ===== Twin Peaks Theme ===== */
 :root{
   --bg1:#2b0000; --bg2:#060004;
   --panel:#0e0a0a; --panel2:#1a1212;
   --border:#3a2323; --fg:#f7e9e9; --dim:#c99a9a;
   --accent:#ff2727; --green:#25ff85; --warn:#ff844a;
   --chevron1:#0b0b0b; --chevron2:#1c1c1c;
-  --tb: 60px; /* measured in JS */
+  --tb: 60px; /* measured at runtime */
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
 
-/* ===== Topbar (mobile compact) ===== */
+/* ===== Topbar ===== */
 .topbar{
   display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;
   padding:10px 12px;position:sticky;top:0;z-index:50;background:
@@ -42,12 +42,14 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .synth-btn:hover{box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 8px 20px rgba(0,0,0,.25),0 0 0 3px rgba(255,39,39,.12)}
 .synth-btn:active{transform:translateY(1px)}
 .synth-btn[disabled]{opacity:.45;cursor:not-allowed}
+
 .pill{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:linear-gradient(180deg,var(--panel),var(--panel2));display:inline-flex;align-items:center}
+.pill.dim{opacity:.6}
 .badge{font-size:12px;opacity:.9;margin-left:8px}
 .warn{color:var(--warn)}
 
-/* Compact sizing for small screens */
-@media (max-width: 480px){
+/* Compact sizing for iPhone width (<=430px) */
+@media (max-width: 430px){
   h1{font-size:14px}
   .tb-row{gap:6px}
   .synth-btn{padding:6px 9px;font-size:12px;min-height:30px}
@@ -57,7 +59,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 /* Record visual feedback */
 #recDot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff2727;margin-right:6px;box-shadow:0 0 8px rgba(255,39,39,.6)}
 @keyframes pulse{0%{transform:scale(1);box-shadow:0 0 6px rgba(255,39,39,.6)}50%{transform:scale(1.2);box-shadow:0 0 14px rgba(255,39,39,.9)}100%{transform:scale(1);box-shadow:0 0 6px rgba(255,39,39,.6)}}
-.pill.recording{background:linear-gradient(180deg,#3b0a0a,#1a0b0b);border-color:#6b1f1f;box-shadow:0 0 0 2px rgba(255,39,39,.18) inset,0 0 18px rgba(255,39,39,.22)}
+.pill.recording{background:linear-gradient(180deg,#3b0a0a,#1a0b0b);border-color:#6b1f1f;box-shadow:0 0 0 2px rgba(255,39,39,.18) inset,0 0 18px rgba(255,39,39,.22);opacity:1}
 .pill.recording #recDot{animation:pulse 0.9s infinite}
 
 /* App & keypad */
@@ -79,7 +81,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .owl{width:42px;height:42px;display:grid;place-items:center;border-color:#14532d}
 .owl.micro-on{outline:2px solid var(--green);box-shadow:0 0 14px #25ff8570}
 
-/* ===== Panels: always reachable on mobile ===== */
+/* ===== Panels (mobile-compact) ===== */
 .synth-panel{
   position:fixed; left:0; right:0;
   top:var(--tb); height:calc(100vh - var(--tb));
@@ -92,7 +94,17 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .section{display:grid;grid-template-columns:170px 1fr;gap:8px 12px;padding:10px 0;border-top:1px solid var(--border)}
 .section h4{grid-column:1 / -1;margin:.25rem 0;opacity:.95;letter-spacing:.04em}
 @media (max-width:700px){.section{grid-template-columns:1fr}}
+/* Extra compact mode just for narrow phones (iPhone 16 Pro) */
+@media (max-width:430px){
+  .synth-panel{padding:10px}
+  .section{gap:6px 10px; padding:8px 0}
+  .section h4{font-size:13px}
+  .synth-panel label{font-size:12px}
+  .synth-panel input[type="range"]{touch-action:pan-y}
+  .synth-panel select, .synth-panel input[type="number"], .synth-panel input[type="text"]{font-size:12px}
+}
 
+/* Footer */
 .footer{position:fixed;bottom:0;left:0;right:0;padding:8px 12px;font-size:12px;opacity:.85;background:linear-gradient(0deg,#2b0000,transparent)}
 .midi-learn-on{outline:2px solid var(--accent)}
 .kv{display:flex;gap:6px;align-items:center}
@@ -111,7 +123,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <button id="granularToggle" class="synth-btn" aria-expanded="false" aria-controls="granularPanel">Granular</button>
     <button id="samplerToggle" class="synth-btn" aria-expanded="false" aria-controls="samplerPanel">Sampler</button>
     <div style="display:flex;gap:6px;align-items:center">
-      <button id="recBtn" class="pill" title="Record short take (whole output)">
+      <button id="recBtn" class="pill dim" title="Record short take (whole output)">
         <span id="recDot"></span> <span id="recLabel">Record</span>
       </button>
       <span id="recTimer" class="badge" aria-live="polite"></span>
@@ -119,7 +131,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
   </div>
 </header>
 
-<!-- Synth panel (unchanged content) -->
+<!-- Synth panel -->
 <div id="synthPanel" class="synth-panel" role="region" aria-label="Synth controls">
   <div class="section">
     <h4>Oscillators</h4>
@@ -298,13 +310,14 @@ function setupRecordingBus(){
 }
 function startTopRecording(){
   if(!mediaStreamDest) return;
+  if(!('MediaRecorder' in window)){ document.getElementById('recTimer').textContent='Recording not supported on this browser.'; return; }
   if(mediaRecorder && mediaRecorder.state==='recording') return;
   const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm';
   mediaRecorder=new MediaRecorder(mediaStreamDest.stream,{mimeType:mime,audioBitsPerSecond:128000});
   recChunks=[];
-  // UI feedback on
+  // UI feedback on (arm & light)
   const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
-  recBtn.classList.add('recording'); recLabel.textContent='Stop';
+  recBtn.classList.remove('dim'); recBtn.classList.add('recording'); recLabel.textContent='Stop';
   mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recChunks.push(e.data); };
   mediaRecorder.onstop=async()=>{
     try{
@@ -318,16 +331,16 @@ function startTopRecording(){
       const nm = 'Master '+new Date().toLocaleTimeString();
       takes[nm] = { wavB64:b64, sampleRate: tmp.sampleRate };
       saveTakes(takes);
-      // Directly prime granular with this take
+      // Prime granular with this take
       currentTakeBuffer = tmp;
       currentTakeName = nm;
       enableGranularButtons();
       refreshTakeList();
       setGranularStatus('Added & loaded "'+nm+'" from main Record');
     }catch(e){ console.warn('decode/auto-add error', e); }
-    // UI feedback off
+    // UI feedback off (return to dim)
     const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
-    recBtn.classList.remove('recording'); recLabel.textContent='Record';
+    recBtn.classList.remove('recording'); recBtn.classList.add('dim'); recLabel.textContent='Record';
   };
   mediaRecorder.start(100);
   recStartTs=performance.now();
@@ -341,9 +354,9 @@ function stopTopRecording(){
   if(mediaRecorder&&mediaRecorder.state==='recording'){ try{ mediaRecorder.stop(); }catch{} }
   clearInterval(recInter);
   document.getElementById('recTimer').textContent='';
-  // ensure UI unarmed
+  // ensure UI unarmed & dim
   const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
-  recBtn.classList.remove('recording'); recLabel.textContent='Record';
+  recBtn.classList.remove('recording'); recBtn.classList.add('dim'); recLabel.textContent='Record';
 }
 
 /* ===== Synth engine ===== */
@@ -358,7 +371,6 @@ function ensureAudio(){
   return Promise.resolve(true);
 }
 async function hardResetAudio(){
-  // Full kill, including sampler/granular, so next play is clean.
   try{ stopTopRecording(); }catch{}
   try{ stopGranular(true); }catch{}
   try{ killSamplerAll(); }catch{}
@@ -372,10 +384,9 @@ async function hardResetAudio(){
 
   grainTicker=null; scanTicker=null; grainActive=null; granularOut=null;
 
-  // drop stale sampler bus so it rebuilds on next use
   samplerBus={out:null, filter:null};
 
-  await ensureAudio(); // immediately usable after reset
+  await ensureAudio();
 }
 function makeDriveCurve(amount=0){ const k=amount*20; const n=44100; const c=new Float32Array(n); for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=(1+k)*x/(1+k*Math.abs(x)); } return c; }
 function makeSynth(a){
@@ -668,8 +679,7 @@ function startGranular(){
   if(!currentTakeBuffer||!audioCtx){ setGranularStatus('No take'); return; }
   stopGranular(true);
   granularOut=audioCtx.createGain(); granularOut.gain.value=parseFloat(g['g_gain'].value||'0.7');
-  granularOut.connect(mixNode); // record/limit once
-
+  granularOut.connect(mixNode);
   grainActive=new Set();
   let posPct=(parseFloat(g['g_pos'].value)||0)/100;
   let last=audioCtx.currentTime; let acc=0;
@@ -759,7 +769,6 @@ async function samplerLoadByName(nm){
 }
 function initSamplerBus(){
   if(!audioCtx) return;
-  // If a stale bus exists from an old context, drop it
   try{ if(samplerBus.out && samplerBus.out.context !== audioCtx) samplerBus={out:null,filter:null}; }catch{}
   if(samplerBus.out) return;
   const out=audioCtx.createGain(); out.gain.value=parseFloat(document.getElementById('sam_gain').value||'0.9');
