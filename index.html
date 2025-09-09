@@ -3,20 +3,29 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>StagSynth — v8g18-mobilefix</title>
+<title>StagSynth — v9 FX Mobile</title>
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="%23ff2727" stroke-width="6"/><text x="32" y="42" text-anchor="middle" font-size="32" fill="%23ff2727">🦉</text></svg>' />
 <style>
-/* ===== Twin Peaks Theme ===== */
+/* ===== Theme ===== */
 :root{
   --bg1:#2b0000; --bg2:#060004;
   --panel:#0e0a0a; --panel2:#1a1212;
   --border:#3a2323; --fg:#f7e9e9; --dim:#c99a9a;
   --accent:#ff2727; --green:#25ff85; --warn:#ff844a;
   --chevron1:#0b0b0b; --chevron2:#1c1c1c;
-  --tb: 60px; /* measured at runtime */
+  --tb: 60px;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+
+/* --- Mobile feel: prevent accidental text selections & drag scroll --- */
+body, .app, .keypad-wrap, .keypad, .key {
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+.key { touch-action: none; }
+* { -webkit-tap-highlight-color: transparent; }
+input, select, textarea { -webkit-user-select: text; user-select: text; } /* keep form controls selectable */
 
 /* ===== Topbar ===== */
 .topbar{
@@ -94,7 +103,6 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .section{display:grid;grid-template-columns:170px 1fr;gap:8px 12px;padding:10px 0;border-top:1px solid var(--border)}
 .section h4{grid-column:1 / -1;margin:.25rem 0;opacity:.95;letter-spacing:.04em}
 @media (max-width:700px){.section{grid-template-columns:1fr}}
-/* Extra compact mode just for narrow phones (iPhone 16 Pro) */
 @media (max-width:430px){
   .synth-panel{padding:10px}
   .section{gap:6px 10px; padding:8px 0}
@@ -143,24 +151,59 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <label>Sub Octave <select id="subOctave" data-midicc><option value="1" selected>1x</option><option value="0.5">½x</option></select></label>
     <label>Noise Color <select id="noiseColor" data-midicc><option>white</option><option>pink</option></select></label>
   </div>
+
   <div class="section">
     <h4>Filter</h4>
     <label>Mode <select id="mode" data-midicc><option>lp</option><option>bp</option><option>hp</option></select></label>
     <label>Cutoff <input type="range" id="cutoff" data-midicc min="60" max="12000" step="1" value="1600"/></label>
     <label>Resonance <input type="range" id="resonance" data-midicc min="0" max="1" step="0.01" value="0.2"/></label>
   </div>
-  <div class="section">
-    <h4>Envelope</h4>
-    <label>A <input type="range" id="a" data-midicc min="0" max="1" step="0.001" value="0.01"/></label>
-    <label>D <input type="range" id="d" data-midicc min="0" max="1" step="0.001" value="0.08"/></label>
-    <label>S <input type="range" id="s" data-midicc min="0" max="1" step="0.01" value="0.6"/></label>
-    <label>R <input type="range" id="r" data-midicc min="0" max="2" step="0.01" value="0.15"/></label>
+
+  <!-- ===== FULL FX SUITE ===== -->
+  <div class="section" id="fxSuite">
+    <h4>FX Suite</h4>
+
+    <!-- Reverb -->
+    <label>Reverb Room Size <input type="range" id="fx_rev_room" data-midicc min="0.1" max="1.0" step="0.01" value="0.6"/></label>
+    <label>Reverb Decay (s) <input type="range" id="fx_rev_decay" data-midicc min="0.2" max="12" step="0.1" value="3.0"/></label>
+    <label>Reverb Pre-delay (ms) <input type="range" id="fx_rev_predelay" data-midicc min="0" max="200" step="1" value="20"/></label>
+    <label>Reverb Damping (Hz) <input type="range" id="fx_rev_damp" data-midicc min="1000" max="20000" step="10" value="6000"/></label>
+    <label>Reverb Mix <input type="range" id="fx_rev_mix" data-midicc min="0" max="1" step="0.01" value="0.15"/></label>
+
+    <!-- Chorus -->
+    <label>Chorus Rate (Hz) <input type="range" id="fx_ch_rate" data-midicc min="0.05" max="8" step="0.01" value="1.0"/></label>
+    <label>Chorus Depth (ms) <input type="range" id="fx_ch_depth" data-midicc min="0" max="20" step="0.1" value="6"/></label>
+    <label>Chorus Voices <input type="number" id="fx_ch_voices" min="1" max="4" step="1" value="2"/></label>
+    <label>Stereo Width <input type="range" id="fx_ch_width" data-midicc min="0" max="1" step="0.01" value="0.8"/></label>
+    <label>Chorus Mix <input type="range" id="fx_ch_mix" data-midicc min="0" max="1" step="0.01" value="0.25"/></label>
+
+    <!-- Compressor -->
+    <label>Comp Threshold (dB) <input type="range" id="fx_comp_thr" data-midicc min="-60" max="0" step="1" value="-18"/></label>
+    <label>Comp Ratio <input type="range" id="fx_comp_ratio" data-midicc min="1" max="20" step="0.1" value="4"/></label>
+    <label>Comp Attack (ms) <input type="range" id="fx_comp_att" data-midicc min="0.1" max="200" step="0.1" value="5"/></label>
+    <label>Comp Release (ms) <input type="range" id="fx_comp_rel" data-midicc min="10" max="1000" step="1" value="200"/></label>
+    <label>Makeup Gain <input type="range" id="fx_comp_makeup" data-midicc min="0" max="12" step="0.1" value="0"/></label>
+
+    <!-- Bitcrusher -->
+    <label>Bit Depth <input type="range" id="fx_bc_bits" data-midicc min="1" max="24" step="1" value="12"/></label>
+    <label>Downsample (Hz) <input type="range" id="fx_bc_rate" data-midicc min="100" max="48000" step="50" value="12000"/></label>
+    <label>Bitcrusher Mix <input type="range" id="fx_bc_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
+
+    <!-- Ring Mod -->
+    <label>Ring Carrier Freq (Hz) <input type="range" id="fx_rm_freq" data-midicc min="0.1" max="20000" step="0.1" value="30"/></label>
+    <label>Ring Carrier Wave
+      <select id="fx_rm_wave" data-midicc>
+        <option>sine</option><option>triangle</option><option>square</option><option>sawtooth</option>
+      </select>
+    </label>
+    <label>Ring Depth <input type="range" id="fx_rm_depth" data-midicc min="0" max="1.5" step="0.01" value="1.0"/></label>
+    <label>Ring Mix <input type="range" id="fx_rm_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
+
+    <!-- Original color bus -->
+    <label>Drive (Color) <input type="range" id="drive" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
+    <label>Color Mix <input type="range" id="mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
   </div>
-  <div class="section">
-    <h4>FX</h4>
-    <label>Drive <input type="range" id="drive" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
-    <label>Mix <input type="range" id="mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
-  </div>
+
   <div class="section">
     <h4>Presets</h4>
     <label>Preset <select id="presetSelect"></select></label>
@@ -278,7 +321,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
   </div>
 </main>
 
-<footer class="footer">WebAudio • WebMIDI + CC Learn • Full Synth • Granular • Sampler</footer>
+<footer class="footer">WebAudio • WebMIDI + CC Learn • Full Synth • FX Suite • Granular • Sampler</footer>
 
 <script>
 /* ===== Utilities ===== */
@@ -287,6 +330,14 @@ function u8ToB64(u8){ const CHUNK=0x7000; let out=''; for(let i=0;i<u8.length;i+
 function b64EncodeUnicode(str){ try{ return btoa(unescape(encodeURIComponent(str))); }catch{ return btoa(str); } }
 function b64DecodeUnicode(str){ try{ return decodeURIComponent(escape(atob(str))); }catch{ return atob(str); } }
 const midiToFreq=m=>440*Math.pow(2,(m-69)/12);
+function tapToUnlockAudio(){
+  try{
+    if(!audioCtx) return;
+    const b = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+    const s = audioCtx.createBufferSource(); s.buffer = b; s.connect(audioCtx.destination);
+    try{ s.start(0); }catch{} s.disconnect();
+  }catch{}
+}
 
 /* ===== Core state ===== */
 let audioCtx=null; let GRID_W=4; let gridRows=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)?8:4;
@@ -296,7 +347,7 @@ let bendSemis=0; let bendRange=2; let microMode=false;
 /* ===== Recording bus & shared stores ===== */
 let mixNode=null, limiter=null, mediaStreamDest=null, mediaRecorder=null;
 let recChunks=[], recStartTs=0, recInter=null; const MAX_REC_S=15;
-const TAKES_KEY='stagsynth_takes_v4';
+const TAKES_KEY='stagsynth_takes_v5';
 function loadTakes(){ try{ return JSON.parse(localStorage.getItem(TAKES_KEY)||'{}'); }catch{return{}} }
 function saveTakes(o){ try{ localStorage.setItem(TAKES_KEY, JSON.stringify(o)); }catch{} }
 /* ===== Setup / teardown ===== */
@@ -362,7 +413,7 @@ function startTopRecording(){
       const arr  = await blob.arrayBuffer();
       await ensureAudio();
 
-      // Try native decode first (works for AAC on iOS and WebM/Opus on desktop where supported)
+      // Try native decode first
       let decoded=null;
       try{
         decoded = await audioCtx.decodeAudioData(arr.slice(0));
@@ -375,7 +426,6 @@ function startTopRecording(){
         const url = URL.createObjectURL(blob);
         const el  = new Audio();
         el.src = url; el.crossOrigin='anonymous';
-        // Try to get metadata ready without actually playing sound
         await el.play().catch(()=>{}); el.pause();
         const dur = Math.max(0.01, isFinite(el.duration) && el.duration>0 ? el.duration : 1.0);
         const off = new OfflineAudioContext(2, Math.ceil((audioCtx.sampleRate||48000) * dur), audioCtx.sampleRate||48000);
@@ -430,12 +480,18 @@ function stopTopRecording(){
   recBtn.classList.remove('recording'); recBtn.classList.add('dim'); recLabel.textContent='Record';
 }
 
-/* ===== Synth engine ===== */
-let synth=null;
+/* ===== Audio bootstrap / reset ===== */
 function ensureAudio(){
   if(audioCtx && audioCtx.state==='suspended'){ audioCtx.resume?.(); }
   if(synth) return Promise.resolve(true);
+
   audioCtx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+
+  // iOS Chrome/Safari unlock: resume on any tap/click and prime with a silent tick
+  const unlock = ()=>{ audioCtx.resume?.(); tapToUnlockAudio(); };
+  window.addEventListener('touchend', unlock, { once:true, passive:true });
+  window.addEventListener('click', unlock, { once:true, passive:true });
+
   setupRecordingBus();
   synth=makeSynth(audioCtx);
   pushParams();
@@ -458,66 +514,278 @@ async function hardResetAudio(){
 
   await ensureAudio();
 }
+
+/* ===== Tone helpers ===== */
 function makeDriveCurve(amount=0){
   const k=amount*20; const n=44100; const c=new Float32Array(n);
   for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=(1+k)*x/(1+k*Math.abs(x)); }
   return c;
 }
+
+/* ===== Bitcrusher Worklet (inline) ===== */
+let bitcrusherNode=null, bitcrusherMix=null;
+async function initBitcrusherWorklet(ctx){
+  if(ctx.audioWorklet && !ctx._bcRegistered){
+    const code = `
+      class BitcrusherProcessor extends AudioWorkletProcessor{
+        static get parameterDescriptors(){
+          return [
+            { name:'bits', defaultValue:12, minValue:1, maxValue:24, automationRate:'k-rate' },
+            { name:'downRate', defaultValue:12000, minValue:50, maxValue:96000, automationRate:'k-rate' }
+          ];
+        }
+        constructor(){ super(); this._phase=0; this._lastL=0; this._lastR=0; }
+        process(inputs, outputs, params){
+          const input = inputs[0], output = outputs[0];
+          if(!input || !input[0] || !output || !output[0]) return true;
+          const inL=input[0], inR=input[1]||input[0], outL=output[0], outR=output[1]||output[0];
+          const bits = params.bits[0];
+          const step = Math.max(1, Math.floor(sampleRate / Math.max(50, params.downRate[0]||12000)));
+          const levels = Math.max(1, (1<<Math.max(1,Math.min(24, bits))));
+          const q = 2/levels; // quantization step over [-1..1]
+          for(let i=0;i<outL.length;i++){
+            if(this._phase===0){
+              this._lastL = Math.max(-1,Math.min(1, Math.round(inL[i]/q)*q));
+              this._lastR = Math.max(-1,Math.min(1, Math.round(inR[i]/q)*q));
+            }
+            outL[i]=this._lastL; outR[i]=this._lastR;
+            this._phase = (this._phase+1)%step;
+          }
+          return true;
+        }
+      }
+      registerProcessor('bitcrusher-processor', BitcrusherProcessor);
+    `;
+    const blob = new Blob([code], {type:'application/javascript'});
+    const url  = URL.createObjectURL(blob);
+    await ctx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    ctx._bcRegistered = true;
+  }
+}
+
+/* ===== Synth engine with FX Suite ===== */
+let synth=null;
 function makeSynth(a){
   const voices=new Map();
+
+  // --- Core buses (original color bus preserved)
   const buses = {
     master: mixNode,
-    filter:a.createBiquadFilter(),
-    shaper:a.createWaveShaper(),
-    dry:a.createGain(), wet:a.createGain(), sum:a.createGain()
+    colorFilter: a.createBiquadFilter(),
+    shaper: a.createWaveShaper(),
+    dry: a.createGain(), wet: a.createGain(), sum: a.createGain()
   };
   buses.dry.gain.value=1; buses.wet.gain.value=0;
-  buses.filter.type='lowpass'; buses.filter.frequency.value=1600; buses.filter.Q.value=0.2;
-  buses.shaper.curve=makeDriveCurve(0);
+  buses.colorFilter.type='lowpass'; buses.colorFilter.frequency.value=1600; buses.colorFilter.Q.value=0.2;
+  buses.shaper.curve = makeDriveCurve(0);
+
+  // --- FX: nodes & mixers
+  // Ring mod
+  const rmCarrier = a.createOscillator(); rmCarrier.type='sine'; rmCarrier.frequency.value=30;
+  const rmDepth = a.createGain(); rmDepth.gain.value=1.0;
+  const ringGain = a.createGain(); ringGain.gain.value=0.0; // carrier drives this gain param
+  rmCarrier.connect(rmDepth).connect(ringGain.gain);
+
+  const ringWet = a.createGain(); ringWet.gain.value=0.0; // ring mix
+  const ringDry = a.createGain(); ringDry.gain.value=1.0;
+
+  // Chorus: L/R delays modulated by LFOs
+  const chIn = a.createGain(); const chOut = a.createGain();
+  const chDry = a.createGain(); chDry.gain.value=1.0;
+  const chWet = a.createGain(); chWet.gain.value=0.0;
+  const chDelayL = a.createDelay(0.05), chDelayR = a.createDelay(0.05);
+  const chLFO1 = a.createOscillator(), chLFO2 = a.createOscillator();
+  const chDepthL = a.createGain(), chDepthR = a.createGain();
+  chLFO1.type='sine'; chLFO2.type='sine';
+  chDepthL.gain.value = 0.006;  // ~6ms default
+  chDepthR.gain.value = 0.006;
+  chLFO1.connect(chDepthL).connect(chDelayL.delayTime);
+  chLFO2.connect(chDepthR).connect(chDelayR.delayTime);
+  chIn.connect(chDelayL).connect(chWet);
+  chIn.connect(chDelayR).connect(chWet);
+  chIn.connect(chDry);
+  chDry.connect(chOut); chWet.connect(chOut);
+
+  // Bitcrusher (worklet) + mix
+  const bcIn = a.createGain(), bcOut = a.createGain();
+  const bcDry = a.createGain(); bcDry.gain.value=1.0;
+  const bcWet = a.createGain(); bcWet.gain.value=0.0;
+
+  // Reverb: predelay → convolver → damping LPF → mix
+  const revIn = a.createGain(), revOut = a.createGain();
+  const revDry = a.createGain(); revDry.gain.value=1.0;
+  const revWet = a.createGain(); revWet.gain.value=0.0;
+  const revPre = a.createDelay(0.25);
+  const revConv = a.createConvolver();
+  const revDamp = a.createBiquadFilter(); revDamp.type='lowpass'; revDamp.frequency.value=6000;
+
+  revPre.connect(revConv).connect(revDamp).connect(revWet);
+  revIn.connect(revDry); revDry.connect(revOut); revWet.connect(revOut);
+
+  // Compressor + makeup
+  const comp = a.createDynamicsCompressor();
+  const makeup = a.createGain(); makeup.gain.value=1.0;
+
+  // --- Wire full chain: voices → color → ring → chorus → bitcrusher → reverb → comp → limiter
   buses.master.connect(buses.dry).connect(buses.sum);
-  buses.master.connect(buses.filter).connect(buses.shaper).connect(buses.wet).connect(buses.sum);
-  buses.sum.connect(limiter);
+  buses.master.connect(buses.colorFilter).connect(buses.shaper).connect(buses.wet).connect(buses.sum);
 
-  const params={shape:'sawtooth', subShape:'off', detune:0, subDetune:0, subLevel:0.8, subOctave:1, noiseColor:'white', cutoff:1600, resonance:0.2, mode:'lp', a:0.01,d:0.08,s:0.6,r:0.15, drive:0, mix:0};
+  const colorOut = buses.sum;
+  const postColor = a.createGain(); colorOut.connect(postColor);
+  postColor.connect(ringDry);
+  postColor.connect(ringGain);
+  ringGain.connect(ringWet);
+
+  const ringMix = a.createGain();
+  ringDry.connect(ringMix);
+  ringWet.connect(ringMix);
+
+  ringMix.connect(chIn);
+  chOut.connect(bcIn);
+
+  bcIn.connect(bcDry);
+  bcIn.connect(bcOut); // placeholder; worklet will replace bcOut path
+  bcDry.connect(revIn);
+  bcOut.connect(revIn);
+  bcDry.connect(revDry);
+  bcOut.connect(revWet);
+
+  revOut.connect(comp).connect(makeup).connect(limiter);
+
+  // Start carriers/LFOs
+  try{ rmCarrier.start(); chLFO1.start(); chLFO2.start(); }catch{}
+
+  // Prepare bitcrusher worklet node
+  (async ()=>{
+    await initBitcrusherWorklet(a);
+    const node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
+    bitcrusherNode = node;
+    bitcrusherMix = { dry: bcDry, wet: bcWet };
+    // route bcIn → node → bcWet
+    bcIn.connect(node).connect(bcWet);
+  })();
+
+  // --- Params & helpers
+  const params={
+    // color bus (kept from your original)
+    cutoff:1600,resonance:0.2,mode:'lp', drive:0, mix:0,
+    // reverb
+    fx_rev_room:0.6, fx_rev_decay:3.0, fx_rev_predelay:0.02, fx_rev_damp:6000, fx_rev_mix:0.15,
+    // chorus
+    fx_ch_rate:1.0, fx_ch_depth:0.006, fx_ch_voices:2, fx_ch_width:0.8, fx_ch_mix:0.25,
+    // comp
+    fx_comp_thr:-18, fx_comp_ratio:4, fx_comp_att:0.005, fx_comp_rel:0.2, fx_comp_makeup:0,
+    // bitcrusher
+    fx_bc_bits:12, fx_bc_rate:12000, fx_bc_mix:0.0,
+    // ring
+    fx_rm_freq:30, fx_rm_wave:'sine', fx_rm_depth:1.0, fx_rm_mix:0.0,
+    // osc/envelope defaults (set from UI on push)
+    shape:'sawtooth', subShape:'off', detune:0, subDetune:0, subLevel:0.8, subOctave:1, noiseColor:'white',
+    a:0.01,d:0.08,s:0.6,r:0.15
+  };
+
+  function regenImpulse(room=0.6, decay=3.0){
+    const dur = Math.max(0.2, decay) * (0.6 + room*0.8);
+    const len = Math.ceil(a.sampleRate * Math.min(12, dur));
+    const buf = a.createBuffer(2, len, a.sampleRate);
+    for(let ch=0; ch<2; ch++){
+      const data = buf.getChannelData(ch);
+      for(let i=0;i<len;i++){
+        const t = i/len;
+        const env = Math.pow(1 - t, 2.5); // exponential-ish tail
+        data[i] = (Math.random()*2-1) * env;
+      }
+    }
+    return buf;
+  }
+
+  function setReverb(){
+    revConv.buffer = regenImpulse(params.fx_rev_room, params.fx_rev_decay);
+    revPre.delayTime.value = params.fx_rev_predelay;
+    revDamp.frequency.value = params.fx_rev_damp;
+    revWet.gain.value = params.fx_rev_mix;
+    revDry.gain.value = 1 - params.fx_rev_mix;
+  }
+
+  function setChorus(){
+    const rate = params.fx_ch_rate;
+    const depth = Math.max(0, params.fx_ch_depth)/1000; // ms → sec
+    chDepthL.gain.value = depth;
+    chDepthR.gain.value = depth * (0.5 + params.fx_ch_width*0.5);
+    chLFO1.frequency.value = rate;
+    chLFO2.frequency.value = rate * (0.9 + params.fx_ch_width*0.2);
+    chWet.gain.value = params.fx_ch_mix;
+    chDry.gain.value = 1 - params.fx_ch_mix;
+  }
+
+  function setRing(){
+    rmCarrier.type = params.fx_rm_wave;
+    rmCarrier.frequency.value = params.fx_rm_freq;
+    rmDepth.gain.value = params.fx_rm_depth;
+    ringWet.gain.value = params.fx_rm_mix;
+    ringDry.gain.value = 1 - params.fx_rm_mix;
+  }
+
+  function setBitcrusher(){
+    if(bitcrusherNode){
+      bitcrusherNode.parameters.get('bits')?.setValueAtTime(params.fx_bc_bits, a.currentTime);
+      bitcrusherNode.parameters.get('downRate')?.setValueAtTime(params.fx_bc_rate, a.currentTime);
+      bcWet.gain.value = params.fx_bc_mix;
+      bcDry.gain.value = 1 - params.fx_bc_mix;
+    }
+  }
+
+  function setCompressor(){
+    comp.threshold.value = params.fx_comp_thr;
+    comp.ratio.value     = params.fx_comp_ratio;
+    comp.attack.value    = Math.max(0.0001, params.fx_comp_att);
+    comp.release.value   = Math.max(0.001, params.fx_comp_rel);
+    makeup.gain.value    = Math.pow(10, (params.fx_comp_makeup||0)/20);
+  }
+
+  setReverb(); setChorus(); setRing(); setCompressor();
+  (async()=>{ await initBitcrusherWorklet(a); setBitcrusher(); })();
+  // ===== Voice helpers (kept from earlier build) =====
   const shapeMap={saw:'sawtooth',sawtooth:'sawtooth',square:'square',triangle:'triangle',sine:'sine',noise:'noise',off:'off'};
-
   function noise(color){
     const buffer=a.createBuffer(1, a.sampleRate*2, a.sampleRate);
     const data=buffer.getChannelData(0);
-    if(color==='pink'){
-      let b0=0, AA=0.997;
-      for(let i=0;i<data.length;i++){ const w=Math.random()*2-1; b0=AA*b0+(1-AA)*w; data[i]=b0*1.5; }
-    } else {
-      for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
-    }
+    if(color==='pink'){ let b0=0, AA=0.997; for(let i=0;i<data.length;i++){ const w=Math.random()*2-1; b0=AA*b0+(1-AA)*w; data[i]=b0*1.5; } }
+    else { for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1; }
     const src=a.createBufferSource(); src.buffer=buffer; src.loop=true; return src;
   }
-  function osc(freq, type){
-    if(type==='noise') return noise(params.noiseColor||'white');
-    const o=a.createOscillator(); o.type=type; o.frequency.value=freq; return o;
-  }
+  function osc(freq, type){ if(type==='noise') return noise(params.noiseColor||'white'); const o=a.createOscillator(); o.type=type; o.frequency.value=freq; return o; }
   function env(){ const clamp01=(x)=>Math.max(0,Math.min(1,x)); return { a:Math.max(.001,params.a), d:Math.max(.001,params.d), s:clamp01(params.s), r:Math.max(.001,params.r) }; }
-  function apply(name,value){
-    if(name==='shape'||name==='subShape'){
-      const mapped=shapeMap[String(value)]||String(value);
-      if(name==='shape') params.shape=mapped; else params.subShape=mapped; return;
-    }
-    params[name]=value;
-    if(name==='cutoff'){ buses.filter.frequency.value=Math.max(50, value|0); }
-    if(name==='resonance'){ buses.filter.Q.value=Math.max(0, Math.min(20, (value||0)*20)); }
-    if(name==='mode'){ buses.filter.type=(value==='hp')?'highpass':(value==='bp')?'bandpass':'lowpass'; }
-    if(name==='mix'){ const mix=Math.max(0,Math.min(1,value||0)); buses.wet.gain.value=mix; buses.dry.gain.value=1-mix; }
-    if(name==='drive'){ buses.shaper.curve = makeDriveCurve(Math.max(0,Math.min(1,value||0))); }
-  }
 
   return{
-    set:apply,
+    set(name,value){
+      // store then fan-out to handlers
+      if(name==='shape'||name==='subShape'){ /* applied in voice creation */ }
+      this._params = this._params||{};
+      this._params[name]=value;
+
+      // map to master/color
+      if(name==='cutoff'){ buses.colorFilter.frequency.value=Math.max(50, value|0); }
+      if(name==='resonance'){ buses.colorFilter.Q.value=Math.max(0, Math.min(20, (value||0)*20)); }
+      if(name==='mode'){ buses.colorFilter.type=(value==='hp')?'highpass':(value==='bp')?'bandpass':'lowpass'; }
+      if(name==='mix'){ const mix=Math.max(0,Math.min(1,value||0)); buses.wet.gain.value=mix; buses.dry.gain.value=1-mix; }
+      if(name==='drive'){ buses.shaper.curve = makeDriveCurve(Math.max(0,Math.min(1,value||0))); }
+
+      // FX updates
+      if(name.startsWith('fx_rev_')){ params[name]=value; setReverb(); }
+      else if(name.startsWith('fx_ch_')){ params[name]=value; setChorus(); }
+      else if(name.startsWith('fx_rm_')){ params[name]=value; setRing(); }
+      else if(name.startsWith('fx_bc_')){ params[name]=value; setBitcrusher(); }
+      else if(name.startsWith('fx_comp_')){ params[name]=value; setCompressor(); }
+      else { params[name]=value; }
+    },
     setBend(semi){
       const ratio=Math.pow(2,(semi||0)/12);
       for(const v of voices.values()){
         const base=v.baseFreq;
-        v.main?.forEach(o=>{ if(o.frequency){ o.frequency.value = base * Math.pow(2,(params.detune||0)/1200) * ratio; } });
-        v.sub ?.forEach(o=>{ if(o.frequency){ const b=((params.subOctave||1)===0.5)?(base/2):base; o.frequency.value = b * Math.pow(2,(params.subDetune||0)/1200) * ratio; } });
+        v.main?.forEach(o=>{ if(o.frequency){ o.frequency.value = base * Math.pow(2,((this._params?.detune)||0)/1200) * ratio; } });
+        v.sub ?.forEach(o=>{ if(o.frequency){ const b=((this._params?.subOctave||1)===0.5)?(base/2):base; o.frequency.value = b * Math.pow(2,((this._params?.subDetune)||0)/1200) * ratio; } });
       }
     },
     noteOn(m,vel=0.9){
@@ -574,19 +842,18 @@ function makeSynth(a){
     }
   };
 }
-function pushParams(){
-  if(!synth) return;
-  ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor']
-    .forEach(id=>{
-      const el=document.getElementById(id);
-      if(!el) return;
-      const val=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value;
-      try{synth.set(id,val)}catch{};
-    });
-}
+
 /* ===== Presets ===== */
-const PRESET_KEY='stagsynth_presets_v3';
-const PRESET_PARAMS=['shape','subShape','detune','subDetune','subLevel','subOctave','noiseColor','cutoff','resonance','mode','a','d','s','r','drive','mix'];
+const PRESET_KEY='stagsynth_presets_v4';
+const PRESET_PARAMS=[
+  'shape','subShape','detune','subDetune','subLevel','subOctave','noiseColor',
+  'cutoff','resonance','mode','a','d','s','r','drive','mix',
+  'fx_rev_room','fx_rev_decay','fx_rev_predelay','fx_rev_damp','fx_rev_mix',
+  'fx_ch_rate','fx_ch_depth','fx_ch_voices','fx_ch_width','fx_ch_mix',
+  'fx_comp_thr','fx_comp_ratio','fx_comp_att','fx_comp_rel','fx_comp_makeup',
+  'fx_bc_bits','fx_bc_rate','fx_bc_mix',
+  'fx_rm_freq','fx_rm_wave','fx_rm_depth','fx_rm_mix'
+];
 function loadPresetStore(){ try{ return JSON.parse(localStorage.getItem(PRESET_KEY)||'{}'); }catch{return{}} }
 function savePresetStore(s){ try{ localStorage.setItem(PRESET_KEY, JSON.stringify(s)); }catch{} }
 function readUI(){ const o={}; PRESET_PARAMS.forEach(k=>{ const el=document.getElementById(k); if(el){ o[k]=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value; } }); return o; }
@@ -619,6 +886,24 @@ function initPresets(){
     const url=location.origin+location.pathname + '#presets=' + b64EncodeUnicode(JSON.stringify(store));
     try{ await navigator.clipboard.writeText(url); msg.textContent='Link copied'; setTimeout(()=>msg.textContent='',1200); }catch{ prompt('Copy URL', url); }
   };
+}
+
+/* ===== Param push (includes FX) ===== */
+function pushParams(){
+  if(!synth) return;
+  [
+    'shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor',
+    'fx_rev_room','fx_rev_decay','fx_rev_predelay','fx_rev_damp','fx_rev_mix',
+    'fx_ch_rate','fx_ch_depth','fx_ch_voices','fx_ch_width','fx_ch_mix',
+    'fx_comp_thr','fx_comp_ratio','fx_comp_att','fx_comp_rel','fx_comp_makeup',
+    'fx_bc_bits','fx_bc_rate','fx_bc_mix',
+    'fx_rm_freq','fx_rm_wave','fx_rm_depth','fx_rm_mix'
+  ].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const val=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value;
+    try{synth.set(id,val)}catch{};
+  });
 }
 
 /* ===== Keypad, micro, bend ===== */
@@ -739,7 +1024,6 @@ function attachLearnClicks(){
     });
   });
 }
-
 /* ===== Granular ===== */
 let currentTakeBuffer=null, currentTakeName='';
 let grainTicker=null, scanTicker=null, grainActive=null;
@@ -977,13 +1261,19 @@ function bindHeader(){
   const ml=document.getElementById('midiLearnBtn');
   ml.onclick=()=>{ if(ml.disabled) return; midiLearn=!midiLearn; learnTarget=null; if(midiLearn) ml.classList.add('midi-learn-on'); else ml.classList.remove('midi-learn-on'); document.getElementById('midiState').textContent = midiLearn ? 'Click a control, then move a CC' : 'MIDI map off'; };
 }
+function attachLearnClicks(){ document.querySelectorAll('[data-midicc]').forEach(el=>{ el.addEventListener('click', ()=>{ if(!midiLearn) return; document.querySelectorAll('[data-midicc]').forEach(e=>e.classList.remove('midi-learn-on')); learnTarget=el.id; el.classList.add('midi-learn-on'); }); }); }
 function bindMain(){
   const rd=document.getElementById('octReadout');
   document.getElementById('octUp').onclick=()=>{ octaveOffset=clamp(octaveOffset+1,-2,2); rd.textContent=String(octaveOffset); buildKeypad(); };
   document.getElementById('octDown').onclick=()=>{ octaveOffset=clamp(octaveOffset-1,-2,2); rd.textContent=String(octaveOffset); buildKeypad(); };
   buildKeypad(); bindKeyboard(); bindBendAndMicro();
-  ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor']
-    .forEach(id=> document.getElementById(id)?.addEventListener('input',pushParams));
+  ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor',
+   'fx_rev_room','fx_rev_decay','fx_rev_predelay','fx_rev_damp','fx_rev_mix',
+   'fx_ch_rate','fx_ch_depth','fx_ch_voices','fx_ch_width','fx_ch_mix',
+   'fx_comp_thr','fx_comp_ratio','fx_comp_att','fx_comp_rel','fx_comp_makeup',
+   'fx_bc_bits','fx_bc_rate','fx_bc_mix',
+   'fx_rm_freq','fx_rm_wave','fx_rm_depth','fx_rm_mix'
+  ].forEach(id=> document.getElementById(id)?.addEventListener('input',pushParams));
   attachLearnClicks();
 }
 function main(){ loadPresetStore(); loadTakes(); bindHeader(); bindMain(); initPresets(); bindGranularPanel(); bindSamplerPanel(); }
@@ -991,4 +1281,3 @@ document.addEventListener('DOMContentLoaded', main);
 </script>
 </body>
 </html>
-
