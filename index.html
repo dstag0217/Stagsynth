@@ -106,6 +106,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .midi-learn-on{outline:2px solid var(--accent)}
 .kv{display:flex;gap:6px;align-items:center}
 .kv small{opacity:.8}
+.synth-btn.ll-on{outline:2px solid var(--accent); box-shadow:0 0 10px var(--accent);} 
 </style>
 </head>
 <body>
@@ -314,6 +315,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <button id="microBtn" class="synth-btn owl" title="Quartertone mode">
       <svg viewBox="0 0 100 100" width="22" height="22"><circle cx="50" cy="50" r="40" fill="none" stroke="#25ff85" stroke-width="8"/><text x="50" y="58" text-anchor="middle" font-size="42" fill="#25ff85">🦉</text></svg>
     </button>
+<button id="llToggleOverlay" class="synth-btn" aria-pressed="false" title="Low Latency Mode">LL</button>
     <span id="midiState" class="badge" aria-live="polite"></span>
   </div>
   <div id="keypadWrap" class="keypad-wrap">
@@ -1342,6 +1344,79 @@ function bindMain(){
 }
 function main(){ loadPresetStore(); loadTakes(); bindHeader(); bindMain(); initPresets(); bindGranularPanel(); bindSamplerPanel(); loadMidiMap(); }
 document.addEventListener('DOMContentLoaded', main);
+
+/* ==== Low Latency Mode (single overlay button, robust) ==== */
+(() => {
+  if (window.__LL_ONEBTN_PATCHED__) return; window.__LL_ONEBTN_PATCHED__ = true;
+  let LOW_LATENCY = false;
+
+  function reflectButton(on){
+    const el = document.getElementById('llToggleOverlay');
+    if(el){ el.classList.toggle('ll-on', on); el.setAttribute('aria-pressed', on?'true':'false'); }
+  }
+
+  function applyLowLatencyTweaks(on){
+    LOW_LATENCY = !!on;
+    reflectButton(LOW_LATENCY);
+
+    // 1) Smaller analyser buffer
+    try{ if (typeof ai!=='undefined' && ai && ai.tap) ai.tap.fftSize = on ? 512 : 2048; }catch{}
+
+    // 2) Disconnect MediaStreamDestination unless recording
+    try{ if (window.rec && window.rec.dest && !window.rec.active){ try{ window.rec.dest.disconnect(); }catch{} } }catch{}
+
+    // 3) Faster compressor envelope
+    try{
+      if (window.comp){
+        window._compAttackDefault = window._compAttackDefault ?? comp.attack;
+        window._compReleaseDefault = window._compReleaseDefault ?? comp.release;
+        comp.attack = on ? 0.001 : window._compAttackDefault;
+        comp.release = on ? 0.06  : window._compReleaseDefault;
+      }
+    }catch{}
+
+    // 4) Cap chorus extremes
+    try{
+      const chRate=document.getElementById('fx_ch_rate');
+      const chDepth=document.getElementById('fx_ch_depth');
+      if(on){
+        if(chDepth){ const v=Math.min(parseFloat(chDepth.value)||6,6); if(v!=parseFloat(chDepth.value||0)){ chDepth.value=String(v); chDepth.dispatchEvent(new Event('input',{bubbles:true})); } }
+        if(chRate){ const v=Math.min(parseFloat(chRate.value)||2,2); if(v!=parseFloat(chRate.value||0)){ chRate.value=String(v); chRate.dispatchEvent(new Event('input',{bubbles:true})); } }
+      }
+    }catch{}
+
+    // 5) Lazy bitcrusher
+    try{ window._bcLazy = on; }catch{}
+
+    if(window.DEBUG_LL) console.log('[LL] active:', LOW_LATENCY);
+  }
+
+  // Ensure the handler always binds (even after dynamic UI rebuilds)
+  function bindLLOverlayButton(){
+    const btn = document.getElementById('llToggleOverlay');
+    if(!btn) return;
+    const handler = (e)=>{ e.preventDefault(); e.stopPropagation(); applyLowLatencyTweaks(!LOW_LATENCY); };
+    // Remove existing listeners if re-binding
+    btn.replaceWith(btn.cloneNode(true));
+    const btn2 = document.getElementById('llToggleOverlay');
+    btn2.addEventListener('click', handler, {passive:false});
+    btn2.addEventListener('touchstart', handler, {passive:false});
+    btn2.addEventListener('pointerdown', handler, {passive:false});
+  }
+
+  // Hook: after ensureAudio(), re-bind in case UI changed
+  const _ensure = window.ensureAudio;
+  if(typeof _ensure === 'function'){
+    window.ensureAudio = function(){
+      return _ensure().then(()=>{ bindLLOverlayButton(); });
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', bindLLOverlayButton, {once:true});
+
+  // Public API (optional): window.toggleLL(true/false)
+  window.toggleLL = (on)=> applyLowLatencyTweaks(on==null ? !LOW_LATENCY : !!on);
+})();
 </script>
 </body>
 </html>
