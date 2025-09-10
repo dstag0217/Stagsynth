@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>StagSynth — v10 FX Neutral + iOS Chrome Fix</title>
+<title>StagSynth — FINAL FX Fix</title>
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="%23ff2727" stroke-width="6"/><text x="32" y="42" text-anchor="middle" font-size="32" fill="%23ff2727">🦉</text></svg>' />
 <style>
 /* ===== Theme ===== */
@@ -18,14 +18,11 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
 
-/* --- Mobile feel: prevent accidental text selections & drag scroll --- */
-body, .app, .keypad-wrap, .keypad, .key {
-  -webkit-user-select: none; user-select: none;
-  -webkit-touch-callout: none;
-}
-.key { touch-action: none; }
+/* Mobile feel */
+body, .app, .keypad-wrap, .keypad, .key {-webkit-user-select:none; user-select:none; -webkit-touch-callout:none}
+.key { touch-action:none; }
 * { -webkit-tap-highlight-color: transparent; }
-input, select, textarea { -webkit-user-select: text; user-select: text; } /* keep form controls selectable */
+input, select, textarea { -webkit-user-select:text; user-select:text }
 
 /* ===== Topbar ===== */
 .topbar{
@@ -37,7 +34,6 @@ input, select, textarea { -webkit-user-select: text; user-select: text; } /* kee
 }
 h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .tb-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-
 .synth-btn{
   background:
     linear-gradient(180deg,rgba(255,255,255,.04),transparent),
@@ -51,23 +47,18 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .synth-btn:hover{box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 8px 20px rgba(0,0,0,.25),0 0 0 3px rgba(255,39,39,.12)}
 .synth-btn:active{transform:translateY(1px)}
 .synth-btn[disabled]{opacity:.45;cursor:not-allowed}
-
 .pill{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:linear-gradient(180deg,var(--panel),var(--panel2));display:inline-flex;align-items:center}
 .pill.dim{opacity:.6}
 .badge{font-size:12px;opacity:.9;margin-left:8px}
 .warn{color:var(--warn)}
-
-/* Compact sizing for iPhone width (<=430px) */
 @media (max-width: 430px){
   h1{font-size:14px}
   .tb-row{gap:6px}
   .synth-btn{padding:6px 9px;font-size:12px;min-height:30px}
   .pill{padding:5px 8px}
 }
-
-/* Record visual feedback */
 #recDot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff2727;margin-right:6px;box-shadow:0 0 8px rgba(255,39,39,.6)}
-@keyframes pulse{0%{transform:scale(1);box-shadow:0 0 6px rgba(255,39,39,.6)}50%{transform:scale(1.2);box-shadow:0 0 14px rgba(255,39,39,.9)}100%{transform:scale(1);box-shadow:0 0 6px rgba(255,39,39,.6)}}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
 .pill.recording{background:linear-gradient(180deg,#3b0a0a,#1a0b0b);border-color:#6b1f1f;box-shadow:0 0 0 2px rgba(255,39,39,.18) inset,0 0 18px rgba(255,39,39,.22);opacity:1}
 .pill.recording #recDot{animation:pulse 0.9s infinite}
 
@@ -90,7 +81,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .owl{width:42px;height:42px;display:grid;place-items:center;border-color:#14532d}
 .owl.micro-on{outline:2px solid var(--green);box-shadow:0 0 14px #25ff8570}
 
-/* ===== Panels (mobile-compact) ===== */
+/* Panels */
 .synth-panel{
   position:fixed; left:0; right:0;
   top:var(--tb); height:calc(100vh - var(--tb));
@@ -111,8 +102,6 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
   .synth-panel input[type="range"]{touch-action:pan-y}
   .synth-panel select, .synth-panel input[type="number"], .synth-panel input[type="text"]{font-size:12px}
 }
-
-/* Footer */
 .footer{position:fixed;bottom:0;left:0;right:0;padding:8px 12px;font-size:12px;opacity:.85;background:linear-gradient(0deg,#2b0000,transparent)}
 .midi-learn-on{outline:2px solid var(--accent)}
 .kv{display:flex;gap:6px;align-items:center}
@@ -177,6 +166,18 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <label>Stereo Width <input type="range" id="fx_ch_width" data-midicc min="0" max="1" step="0.01" value="0.8"/></label>
     <label>Chorus Mix <input type="range" id="fx_ch_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
 
+    <!-- Distortion (neutral = MIX 0, Drive 0, Tone 20kHz) -->
+    <label>Dist Type
+      <select id="fx_dist_type" data-midicc>
+        <option value="soft" selected>Soft</option>
+        <option value="tanh">Tanh</option>
+        <option value="hard">Hard Clip</option>
+      </select>
+    </label>
+    <label>Dist Drive <input type="range" id="fx_dist_drive" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
+    <label>Dist Tone (Hz) <input type="range" id="fx_dist_tone" data-midicc min="1000" max="20000" step="10" value="20000"/></label>
+    <label>Dist Mix <input type="range" id="fx_dist_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
+
     <!-- Compressor (neutral = ratio 1, makeup 0, threshold 0) -->
     <label>Comp Threshold (dB) <input type="range" id="fx_comp_thr" data-midicc min="-60" max="0" step="1" value="0"/></label>
     <label>Comp Ratio <input type="range" id="fx_comp_ratio" data-midicc min="1" max="20" step="0.1" value="1"/></label>
@@ -184,7 +185,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <label>Comp Release (ms) <input type="range" id="fx_comp_rel" data-midicc min="10" max="1000" step="1" value="200"/></label>
     <label>Makeup Gain <input type="range" id="fx_comp_makeup" data-midicc min="0" max="12" step="0.1" value="0"/></label>
 
-    <!-- Bitcrusher (neutral = MIX 0, hi-res & full rate) -->
+    <!-- Bitcrusher (neutral = MIX 0) -->
     <label>Bit Depth <input type="range" id="fx_bc_bits" data-midicc min="1" max="24" step="1" value="24"/></label>
     <label>Downsample (Hz) <input type="range" id="fx_bc_rate" data-midicc min="100" max="48000" step="50" value="48000"/></label>
     <label>Bitcrusher Mix <input type="range" id="fx_bc_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
@@ -349,32 +350,31 @@ let recChunks=[], recStartTs=0, recInter=null; const MAX_REC_S=15;
 const TAKES_KEY='stagsynth_takes_v5';
 function loadTakes(){ try{ return JSON.parse(localStorage.getItem(TAKES_KEY)||'{}'); }catch{return{}} }
 function saveTakes(o){ try{ localStorage.setItem(TAKES_KEY, JSON.stringify(o)); }catch{} }
-
 /* ===== Setup / teardown ===== */
 function setupRecordingBus(){
   const a=audioCtx;
   mixNode=a.createGain(); mixNode.gain.value=.95;
+
+  // Safety limiter at the very end
   limiter=a.createDynamicsCompressor();
   limiter.threshold.value=-10; limiter.knee.value=20; limiter.ratio.value=8;
   limiter.attack.value=0.003; limiter.release.value=0.25;
+
   mixNode.connect(limiter).connect(a.destination);
-  mediaStreamDest=a.createMediaStreamDestination(); limiter.connect(mediaStreamDest);
+
+  // Recorder taps the post-limiter signal so captured audio matches what you hear
+  mediaStreamDest=a.createMediaStreamDestination();
+  limiter.connect(mediaStreamDest);
 }
 
-/* Choose a recording mime that works on iOS (AAC/MP4), while keeping desktop/webm on Chrome */
+/* Choose recording mime that works broadly; iOS-friendly first */
 function pickBestAudioMime(){
   const prefer=[
-    'audio/mp4',              // iOS-friendly (AAC in MP4)
-    'audio/aac',              // raw AAC
-    'audio/mpeg',             // MP3 fallback
-    'audio/ogg;codecs=opus',  // some Android/desktop
-    'audio/webm;codecs=opus', // desktop Chrome
-    'audio/webm'
+    'audio/mp4', 'audio/aac', 'audio/mpeg',
+    'audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm'
   ];
   for(const m of prefer){
-    try{
-      if(window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
-    }catch{}
+    try{ if(window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; }catch{}
   }
   return '';
 }
@@ -399,33 +399,23 @@ function startTopRecording(){
   }
 
   recChunks=[];
-
-  // UI feedback on (arm & light)
   const recBtn=document.getElementById('recBtn');
   const recLabel=document.getElementById('recLabel');
   recBtn.classList.remove('dim'); recBtn.classList.add('recording'); recLabel.textContent='Stop';
 
   mediaRecorder.ondataavailable=(e)=>{ if(e.data && e.data.size>0) recChunks.push(e.data); };
-
   mediaRecorder.onstop = async ()=>{
     try{
       const blob = new Blob(recChunks, { type: mediaRecorder.mimeType || mime || 'audio/mp4' });
       const arr  = await blob.arrayBuffer();
       await ensureAudio();
 
-      // Try native decode first
       let decoded=null;
-      try{
-        decoded = await audioCtx.decodeAudioData(arr.slice(0));
-      }catch(decErr){
-        console.warn('decodeAudioData failed, attempting element fallback', decErr);
-      }
+      try{ decoded = await audioCtx.decodeAudioData(arr.slice(0)); }catch(decErr){ console.warn('decodeAudioData failed', decErr); }
 
-      // Fallback decode via HTMLAudioElement + OfflineAudioContext if needed
       if(!decoded){
         const url = URL.createObjectURL(blob);
-        const el  = new Audio();
-        el.src = url; el.crossOrigin='anonymous';
+        const el  = new Audio(); el.src = url; el.crossOrigin='anonymous';
         await el.play().catch(()=>{}); el.pause();
         const dur = Math.max(0.01, isFinite(el.duration) && el.duration>0 ? el.duration : 1.0);
         const off = new OfflineAudioContext(2, Math.ceil((audioCtx.sampleRate||48000) * dur), audioCtx.sampleRate||48000);
@@ -436,7 +426,7 @@ function startTopRecording(){
         URL.revokeObjectURL(url);
       }
 
-      // Convert decoded buffer to WAV, stash locally, and auto-load into Granulator
+      // Stash & auto-load into Granulator
       const wavAB = encodeWAVFromBuffer(decoded);
       const b64   = u8ToB64(new Uint8Array(wavAB));
       const takes = loadTakes();
@@ -454,15 +444,13 @@ function startTopRecording(){
       setGranularStatus('Recording finished, but decode failed');
     }
 
-    // UI feedback off (return to dim)
     const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
     recBtn.classList.remove('recording'); recBtn.classList.add('dim'); recLabel.textContent='Record';
   };
 
-  mediaRecorder.start(100); // keep small timeslice for safety
+  mediaRecorder.start(100);
   recStartTs = performance.now();
 
-  // Countdown: show “time left / total”
   recInter = setInterval(()=>{
     const elapsed = ((performance.now()-recStartTs)/1000)|0;
     const left    = Math.max(0, MAX_REC_S - elapsed);
@@ -487,7 +475,7 @@ function ensureAudio(){
 
   audioCtx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
 
-  // iOS Chrome/Safari unlock: resume on any tap/click and prime with a silent tick
+  // iOS Chrome/Safari unlock
   const unlock = ()=>{ audioCtx.resume?.(); tapToUnlockAudio(); };
   window.addEventListener('touchend', unlock, { once:true, passive:true });
   window.addEventListener('click', unlock, { once:true, passive:true });
@@ -515,7 +503,7 @@ async function hardResetAudio(){
   await ensureAudio();
 }
 
-/* ===== Tone helpers ===== */
+/* ===== Curves ===== */
 function makeDriveCurve(amount=0){
   const k=amount*20; const n=44100; const c=new Float32Array(n);
   for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=(1+k)*x/(1+k*Math.abs(x)); }
@@ -541,12 +529,13 @@ async function initBitcrusherWorklet(ctx){
           const inL=input[0], inR=input[1]||input[0], outL=output[0], outR=output[1]||output[0];
           const bits = Math.max(1, Math.min(24, params.bits[0]|0));
           const step = Math.max(1, Math.floor(sampleRate / Math.max(50, params.downRate[0]||48000)));
-          const levels = Math.max(2, (1<<bits));
-          const q = 2/levels; // quantization step over [-1..1]
+          const levels = Math.max(2, (1<<Math.min(23,bits)));
+          const q = 2/levels;
           for(let i=0;i<outL.length;i++){
             if(this._phase===0){
-              this._lastL = Math.max(-1,Math.min(1, Math.round(inL[i]/q)*q));
-              this._lastR = Math.max(-1,Math.min(1, Math.round(inR[i]/q)*q));
+              const l = Math.max(-1,Math.min(1, Math.round(inL[i]/q)*q));
+              const r = Math.max(-1,Math.min(1, Math.round(inR[i]/q)*q));
+              this._lastL = l; this._lastR = r;
             }
             outL[i]=this._lastL; outR[i]=this._lastR;
             this._phase = (this._phase+1)%step;
@@ -564,56 +553,82 @@ async function initBitcrusherWorklet(ctx){
   }
 }
 
-/* ===== Synth engine with FX Suite (neutral by default) ===== */
+/* ===== Synth engine with WORKING core Filter + FX Suite (all reactive) ===== */
 let synth=null;
 function makeSynth(a){
   const voices=new Map();
 
-  // --- Core buses (original color bus preserved)
-  const buses = {
-    master: mixNode,
-    colorFilter: a.createBiquadFilter(),
-    shaper: a.createWaveShaper(),
-    dry: a.createGain(), wet: a.createGain(), sum: a.createGain()
-  };
-  buses.dry.gain.value=1; buses.wet.gain.value=0;
-  buses.colorFilter.type='lowpass'; buses.colorFilter.frequency.value=1600; buses.colorFilter.Q.value=0.2;
-  buses.shaper.curve = makeDriveCurve(0);
+  /* === ALWAYS-IN-PATH CORE FILTER === */
+  const coreFilter = a.createBiquadFilter();
+  coreFilter.type='lowpass'; coreFilter.frequency.value=1600; coreFilter.Q.value=0.2;
 
-  // --- FX: nodes & mixers
-  // Ring mod
+  /* === Optional COLOR bus (drive + wet/dry) AFTER core filter === */
+  const colorDry = a.createGain(); colorDry.gain.value=1.0;
+  const colorWet = a.createGain(); colorWet.gain.value=0.0;
+  const colorSum = a.createGain();
+  const colorFilter = a.createBiquadFilter(); colorFilter.type='lowpass'; colorFilter.frequency.value=1600; colorFilter.Q.value=0.2;
+  const colorShaper = a.createWaveShaper(); colorShaper.curve = makeDriveCurve(0);
+
+  // coreFilter → (dry→sum) + (filter→shaper→wet→sum)
+  coreFilter.connect(colorDry).connect(colorSum);
+  coreFilter.connect(colorFilter).connect(colorShaper).connect(colorWet).connect(colorSum);
+
+  /* === Ring Mod (AM) with depth + wet/dry MIX (FIXED) === */
   const rmCarrier = a.createOscillator(); rmCarrier.type='sine'; rmCarrier.frequency.value=30;
-  const rmDepth = a.createGain(); rmDepth.gain.value=0.0; // neutral depth
-  const ringGain = a.createGain(); ringGain.gain.value=0.0; // carrier drives this gain param
-  rmCarrier.connect(rmDepth).connect(ringGain.gain);
+  const rmDepth   = a.createGain(); rmDepth.gain.value=0.0;
+  const ringVCA   = a.createGain(); ringVCA.gain.value=0.0;
 
-  const ringWet = a.createGain(); ringWet.gain.value=0.0; // ring mix neutral
   const ringDry = a.createGain(); ringDry.gain.value=1.0;
+  const ringWet = a.createGain(); ringWet.gain.value=0.0;
+  const ringMix = a.createGain();
 
-  // Chorus: L/R delays modulated by LFOs
-  const chIn = a.createGain(); const chOut = a.createGain();
+  colorSum.connect(ringDry);
+  colorSum.connect(ringVCA);
+  rmCarrier.connect(rmDepth).connect(ringVCA.gain);
+
+  ringVCA.connect(ringWet);
+  ringDry.connect(ringMix);
+  ringWet.connect(ringMix);
+
+  /* === Chorus (L/R delays) with MIX === */
+  const chIn = a.createGain();
   const chDry = a.createGain(); chDry.gain.value=1.0;
-  const chWet = a.createGain(); chWet.gain.value=0.0; // neutral
+  const chWet = a.createGain(); chWet.gain.value=0.0;
+  const chOut = a.createGain();
   const chDelayL = a.createDelay(0.05), chDelayR = a.createDelay(0.05);
   const chLFO1 = a.createOscillator(), chLFO2 = a.createOscillator();
   const chDepthL = a.createGain(), chDepthR = a.createGain();
   chLFO1.type='sine'; chLFO2.type='sine';
-  chDepthL.gain.value = 0.006;  // ~6ms default depth (inactive when mix=0)
-  chDepthR.gain.value = 0.006;
-  chLFO1.connect(chDepthL).connect(chDelayL.delayTime);
-  chLFO2.connect(chDepthR).connect(chDelayR.delayTime);
+  chDepthL.gain.value = 0.006; chDepthR.gain.value = 0.006;
+
+  ringMix.connect(chIn);
   chIn.connect(chDelayL).connect(chWet);
   chIn.connect(chDelayR).connect(chWet);
   chIn.connect(chDry);
   chDry.connect(chOut); chWet.connect(chOut);
+  chLFO1.connect(chDepthL).connect(chDelayL.delayTime);
+  chLFO2.connect(chDepthR).connect(chDelayR.delayTime);
 
-  // Bitcrusher (worklet) + mix (clean sum)
+  /* === Distortion (Drive/Tone/Mix) === */
+  const distIn  = a.createGain();
+  const distPre = a.createGain();
+  const distWS  = a.createWaveShaper();
+  const distTone= a.createBiquadFilter(); distTone.type='lowpass'; distTone.frequency.value=20000;
+  const distDry = a.createGain(); distDry.gain.value=1.0;
+  const distWet = a.createGain(); distWet.gain.value=0.0;
+  const distSum = a.createGain();
+
+  chOut.connect(distIn);
+  distIn.connect(distDry).connect(distSum);
+  distIn.connect(distPre).connect(distWS).connect(distTone).connect(distWet).connect(distSum);
+
+  /* === Bitcrusher (worklet) with MIX === */
   const bcIn  = a.createGain();
   const bcDry = a.createGain(); bcDry.gain.value = 1.0;
-  const bcWet = a.createGain(); bcWet.gain.value = 0.0;  // neutral
+  const bcWet = a.createGain(); bcWet.gain.value = 0.0;
   const bcSum = a.createGain();
-  bcIn.connect(bcDry);
-  bcDry.connect(bcSum);
+  distSum.connect(bcIn);
+  bcIn.connect(bcDry).connect(bcSum);
   (async ()=>{
     await initBitcrusherWorklet(a);
     const node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
@@ -623,65 +638,72 @@ function makeSynth(a){
     bcWet.connect(bcSum);
   })();
 
-  // Reverb: predelay → convolver → damping LPF → mix
+  /* === Reverb (predelay → convolver → damp LPF) with MIX === */
   const revIn = a.createGain(), revOut = a.createGain();
   const revDry = a.createGain(); revDry.gain.value=1.0;
-  const revWet = a.createGain(); revWet.gain.value=0.0; // neutral
+  const revWet = a.createGain(); revWet.gain.value=0.0;
   const revPre = a.createDelay(0.25);
   const revConv = a.createConvolver();
   const revDamp = a.createBiquadFilter(); revDamp.type='lowpass'; revDamp.frequency.value=6000;
 
-  revPre.connect(revConv).connect(revDamp).connect(revWet);
-  revIn.connect(revDry); revDry.connect(revOut); revWet.connect(revOut);
+  bcSum.connect(revIn);
+  revIn.connect(revDry).connect(revOut);
+  revIn.connect(revPre).connect(revConv).connect(revDamp).connect(revWet).connect(revOut);
 
-  // Compressor + makeup
+  /* === Compressor + Makeup → master limiter === */
   const comp = a.createDynamicsCompressor();
   const makeup = a.createGain(); makeup.gain.value=1.0;
-
-  // --- Wire full chain: voices → color → ring → chorus → bitcrusher → reverb → comp → limiter
-  buses.master.connect(buses.dry).connect(buses.sum);
-  buses.master.connect(buses.colorFilter).connect(buses.shaper).connect(buses.wet).connect(buses.sum);
-
-  const colorOut = buses.sum;
-  const postColor = a.createGain(); colorOut.connect(postColor);
-  postColor.connect(ringDry);
-  postColor.connect(ringGain);
-  ringGain.connect(ringWet);
-
-  const ringMix = a.createGain();
-  ringDry.connect(ringMix);
-  ringWet.connect(ringMix);
-
-  ringMix.connect(chIn);
-  chOut.connect(bcIn);
-
-  // bcSum proceeds to reverb input
-  bcSum.connect(revIn);
-
-  revOut.connect(comp).connect(makeup).connect(limiter);
+  revOut.connect(comp).connect(makeup).connect(mixNode);
 
   // Start carriers/LFOs
   try{ rmCarrier.start(); chLFO1.start(); chLFO2.start(); }catch{}
 
-  // --- Params & helpers (neutral FX) ---
+  // ===== Params (neutral FX by default) =====
   const params={
-    // color bus (kept from your original)
-    cutoff:1600,resonance:0.2,mode:'lp', drive:0, mix:0,
-    // reverb
-    fx_rev_room:0.6, fx_rev_decay:3.0, fx_rev_predelay:0.02, fx_rev_damp:6000, fx_rev_mix:0.0,
-    // chorus
-    fx_ch_rate:1.0, fx_ch_depth:0.006, fx_ch_voices:2, fx_ch_width:0.8, fx_ch_mix:0.0,
-    // comp (neutral)
-    fx_comp_thr:0, fx_comp_ratio:1, fx_comp_att:0.005, fx_comp_rel:0.2, fx_comp_makeup:0,
-    // bitcrusher (neutral)
+    // Core synth filter
+    mode:'lp', cutoff:1600, resonance:0.2,
+
+    // Color bus
+    drive:0, mix:0,
+
+    // Reverb (predelay in ms in UI)
+    fx_rev_room:0.6, fx_rev_decay:3.0, fx_rev_predelay:20, fx_rev_damp:6000, fx_rev_mix:0.0,
+
+    // Chorus (depth in ms in UI)
+    fx_ch_rate:1.0, fx_ch_depth:6, fx_ch_voices:2, fx_ch_width:0.8, fx_ch_mix:0.0,
+
+    // Distortion
+    fx_dist_type:'soft', fx_dist_drive:0.0, fx_dist_tone:20000, fx_dist_mix:0.0,
+
+    // Compressor (attack/release in ms in UI)
+    fx_comp_thr:0, fx_comp_ratio:1, fx_comp_att:5, fx_comp_rel:200, fx_comp_makeup:0,
+
+    // Bitcrusher
     fx_bc_bits:24, fx_bc_rate:48000, fx_bc_mix:0.0,
-    // ring (neutral)
+
+    // Ring Mod
     fx_rm_freq:30, fx_rm_wave:'sine', fx_rm_depth:0.0, fx_rm_mix:0.0,
-    // osc/envelope defaults
+
+    // Osc / env
     shape:'sawtooth', subShape:'off', detune:0, subDetune:0, subLevel:0.8, subOctave:1, noiseColor:'white',
     a:0.01,d:0.08,s:0.6,r:0.15
   };
 
+  // ===== Setters =====
+  function applyCoreFilter(){
+    coreFilter.type = (params.mode==='hp')?'highpass' : (params.mode==='bp')?'bandpass' : 'lowpass';
+    coreFilter.frequency.value = Math.max(40, params.cutoff||1600);
+    coreFilter.Q.value = Math.max(0, Math.min(20, (params.resonance||0.2)*20));
+    // color prefilter follows core tone so drive coloration tracks
+    colorFilter.type = coreFilter.type;
+    colorFilter.frequency.value = coreFilter.frequency.value;
+    colorFilter.Q.value = coreFilter.Q.value*0.6;
+  }
+  function setColor(){
+    colorShaper.curve = makeDriveCurve(Math.max(0, Math.min(1, params.drive||0)));
+    const m = Math.max(0, Math.min(1, params.mix||0));
+    colorWet.gain.value = m; colorDry.gain.value = 1 - m;
+  }
   function regenImpulse(room=0.6, decay=3.0){
     const dur = Math.max(0.2, decay) * (0.6 + room*0.8);
     const len = Math.ceil(a.sampleRate * Math.min(12, dur));
@@ -690,40 +712,68 @@ function makeSynth(a){
       const data = buf.getChannelData(ch);
       for(let i=0;i<len;i++){
         const t = i/len;
-        const env = Math.pow(1 - t, 2.5); // exponential-ish tail
+        const env = Math.pow(1 - t, 2.5);
         data[i] = (Math.random()*2-1) * env;
       }
     }
     return buf;
   }
-
   function setReverb(){
+    const predelaySec = Math.max(0, (params.fx_rev_predelay||20) / 1000); // ms → s
     revConv.buffer = regenImpulse(params.fx_rev_room, params.fx_rev_decay);
-    revPre.delayTime.value = params.fx_rev_predelay;
+    revPre.delayTime.value = predelaySec;
     revDamp.frequency.value = params.fx_rev_damp;
-    revWet.gain.value = params.fx_rev_mix;
-    revDry.gain.value = 1 - params.fx_rev_mix;
+    const mix = Math.max(0, Math.min(1, params.fx_rev_mix||0));
+    revWet.gain.value = mix; revDry.gain.value = 1 - mix;
   }
-
   function setChorus(){
     const rate = params.fx_ch_rate;
-    const depth = Math.max(0, params.fx_ch_depth)/1000; // ms → sec
-    chDepthL.gain.value = depth;
-    chDepthR.gain.value = depth * (0.5 + params.fx_ch_width*0.5);
+    const depthSec = Math.max(0, (params.fx_ch_depth||6))/1000; // ms→s
+    chDepthL.gain.value = depthSec;
+    chDepthR.gain.value = depthSec * (0.5 + params.fx_ch_width*0.5);
     chLFO1.frequency.value = rate;
     chLFO2.frequency.value = rate * (0.9 + params.fx_ch_width*0.2);
     chWet.gain.value = params.fx_ch_mix;
     chDry.gain.value = 1 - params.fx_ch_mix;
   }
-
-  function setRing(){
-    rmCarrier.type = params.fx_rm_wave;
-    rmCarrier.frequency.value = params.fx_rm_freq;
-    rmDepth.gain.value = params.fx_rm_depth;
-    ringWet.gain.value = params.fx_rm_mix;
-    ringDry.gain.value = 1 - params.fx_rm_mix;
+  function makeDistCurve(type='soft', drive=0){
+    const n = 44100, curve = new Float32Array(n);
+    const kSoft = 1e-3 + drive * 40;
+    const kTanh = 1 + drive * 10;
+    const tHard = 1 - 0.8 * drive;
+    for(let i=0;i<n;i++){
+      const x = i/(n-1)*2 - 1;
+      let y = x;
+      if(type==='soft'){
+        y = (1+kSoft)*x/(1+kSoft*Math.abs(x));
+      }else if(type==='tanh'){
+        y = Math.tanh(kTanh * x);
+      }else{
+        const t = Math.max(0.2, tHard);
+        const c = Math.max(-t, Math.min(t, x));
+        y = c / t;
+      }
+      curve[i]=y;
+    }
+    return curve;
   }
-
+  function setDistortion(){
+    const type = params.fx_dist_type||'soft';
+    const drv  = Math.max(0, Math.min(1, params.fx_dist_drive||0));
+    distWS.curve = makeDistCurve(type, drv);
+    distPre.gain.value = 1 + drv * 20;
+    distTone.frequency.value = Math.max(1000, Math.min(20000, params.fx_dist_tone||20000));
+    const mix = Math.max(0, Math.min(1, params.fx_dist_mix||0));
+    distWet.gain.value = mix; distDry.gain.value = 1 - mix;
+  }
+  function setRing(){
+    rmCarrier.type = params.fx_rm_wave||'sine';
+    rmCarrier.frequency.value = params.fx_rm_freq||30;
+    rmDepth.gain.value = Math.max(0, params.fx_rm_depth||0); // AM depth
+    const mix = Math.max(0, Math.min(1, params.fx_rm_mix||0));
+    ringWet.gain.value = mix;      // effective now
+    ringDry.gain.value = 1 - mix;  // effective now
+  }
   function setBitcrusher(){
     const sr = a.sampleRate || 48000;
     const rate = Math.max(50, Math.min(sr, params.fx_bc_rate || sr));
@@ -732,19 +782,21 @@ function makeSynth(a){
       bitcrusherNode.parameters.get('bits')?.setValueAtTime(bits, a.currentTime);
       bitcrusherNode.parameters.get('downRate')?.setValueAtTime(rate, a.currentTime);
     }
-    bcWet.gain.value = Math.max(0, Math.min(1, params.fx_bc_mix || 0));
-    bcDry.gain.value = 1 - bcWet.gain.value;
+    const mix = Math.max(0, Math.min(1, params.fx_bc_mix||0));
+    bcWet.gain.value = mix; bcDry.gain.value = 1 - mix;
   }
-
   function setCompressor(){
+    const attSec = Math.max(0.0001, (params.fx_comp_att||5) / 1000);  // ms→s
+    const relSec = Math.max(0.001,  (params.fx_comp_rel||200) / 1000);
     comp.threshold.value = params.fx_comp_thr;
     comp.ratio.value     = params.fx_comp_ratio;
-    comp.attack.value    = Math.max(0.0001, params.fx_comp_att);
-    comp.release.value   = Math.max(0.001, params.fx_comp_rel);
+    comp.attack.value    = attSec;
+    comp.release.value   = relSec;
     makeup.gain.value    = Math.pow(10, (params.fx_comp_makeup||0)/20);
   }
 
-  setReverb(); setChorus(); setRing(); setCompressor();
+  // Initialize processing graph states
+  applyCoreFilter(); setColor(); setReverb(); setChorus(); setDistortion(); setRing(); setCompressor();
   (async()=>{ await initBitcrusherWorklet(a); setBitcrusher(); })();
 
   // ===== Voice helpers =====
@@ -759,26 +811,25 @@ function makeSynth(a){
   function osc(freq, type){ if(type==='noise') return noise(params.noiseColor||'white'); const o=a.createOscillator(); o.type=type; o.frequency.value=freq; return o; }
   function env(){ const clamp01=(x)=>Math.max(0,Math.min(1,x)); return { a:Math.max(.001,params.a), d:Math.max(.001,params.d), s:clamp01(params.s), r:Math.max(.001,params.r) }; }
 
+  // ===== Public synth API =====
   return{
+    _params: {...params},
     set(name,value){
-      if(name==='shape'||name==='subShape'){ /* applied in voice creation */ }
-      this._params = this._params||{};
       this._params[name]=value;
-
-      // color bus
-      if(name==='cutoff'){ buses.colorFilter.frequency.value=Math.max(50, value|0); }
-      if(name==='resonance'){ buses.colorFilter.Q.value=Math.max(0, Math.min(20, (value||0)*20)); }
-      if(name==='mode'){ buses.colorFilter.type=(value==='hp')?'highpass':(value==='bp')?'bandpass':'lowpass'; }
-      if(name==='mix'){ const mix=Math.max(0,Math.min(1,value||0)); buses.wet.gain.value=mix; buses.dry.gain.value=1-mix; }
-      if(name==='drive'){ buses.shaper.curve = makeDriveCurve(Math.max(0,Math.min(1,value||0))); }
-
-      // FX updates
-      if(name.startsWith('fx_rev_')){ params[name]=value; setReverb(); }
-      else if(name.startsWith('fx_ch_')){ params[name]=value; setChorus(); }
-      else if(name.startsWith('fx_rm_')){ params[name]=value; setRing(); }
-      else if(name.startsWith('fx_bc_')){ params[name]=value; setBitcrusher(); }
-      else if(name.startsWith('fx_comp_')){ params[name]=value; setCompressor(); }
-      else { params[name]=value; }
+      // Core filter
+      if(name==='mode'||name==='cutoff'||name==='resonance'){ params[name]=value; applyCoreFilter(); return; }
+      // Color drive/mix
+      if(name==='drive'||name==='mix'){ params[name]=value; setColor(); return; }
+      // FX
+      if(name.startsWith('fx_rev_')){ params[name]=value; setReverb(); return; }
+      if(name.startsWith('fx_ch_')){ params[name]=value; setChorus(); return; }
+      if(name.startsWith('fx_dist_')){ params[name]=value; setDistortion(); return; }
+      if(name.startsWith('fx_comp_')){ params[name]=value; setCompressor(); return; }
+      if(name.startsWith('fx_bc_')){ params[name]=value; setBitcrusher(); return; }
+      if(name.startsWith('fx_rm_')){ params[name]=value; setRing(); return; }
+      // Osc / env params
+      params[name]=value;
+      if(name==='detune'||name==='subDetune'){ this.setBend?.(bendSemis); }
     },
     setBend(semi){
       const ratio=Math.pow(2,(semi||0)/12);
@@ -803,16 +854,23 @@ function makeSynth(a){
         try{ this.setBend?.(bendSemis) }catch{};
         return;
       }
-      const g=a.createGain(); g.gain.value=1e-5; g.connect(buses.master);
-      const subG=a.createGain(); subG.gain.value=Math.max(0,Math.min(1,params.subLevel||0)); subG.connect(g);
+      // Per-voice gain → CORE FILTER (global) → rest of graph
+      const g=a.createGain(); g.gain.value=1e-5; g.connect(coreFilter);
+
+      // Main & sub osc
       const mainType=shapeMap[params.shape]||'sawtooth';
       const subType =shapeMap[params.subShape]||'off';
       const main=(mainType==='noise')?[noise(params.noiseColor||'white')]:[osc(freq*Math.pow(2,(params.detune||0)/1200),mainType)];
       const base=((params.subOctave||1)===0.5)?(freq/2):freq;
       const sub =(subType==='off')?[]:(subType==='noise')?[noise(params.noiseColor||'white')]:[osc(base*Math.pow(2,(params.subDetune||0)/1200),subType)];
+
+      const subG=a.createGain(); subG.gain.value=Math.max(0,Math.min(1,params.subLevel||0)); subG.connect(g);
       main.forEach(nd=>{ nd.connect(g); try{ nd.start() }catch{} });
       sub.forEach (nd=>{ nd.connect(subG); try{ nd.start() }catch{} });
+
+      // ADSR
       g.gain.setValueAtTime(1e-5,t); g.gain.linearRampToValueAtTime(peak,t+e.a); g.gain.linearRampToValueAtTime(peak*e.s,t+e.a+e.d);
+
       voices.set(key,{g,e,baseFreq:freq,main,sub});
       try{ this.setBend?.(bendSemis) }catch{};
     },
@@ -826,16 +884,16 @@ function makeSynth(a){
         v.main?.forEach(nd=>{ try{ nd.stop(stopAt) }catch{} });
         v.sub ?.forEach(nd=>{ try{ nd.stop(stopAt) }catch{} });
       }catch{}
-      setTimeout(()=>voices.delete(key),100);
+      setTimeout(()=>voices.delete(key),120);
     },
     killAll(){
-      const t=a.currentTime+.005;
+      const t=a.currentTime+.01;
       for(const [k,v] of voices.entries()){
         try{
           v.g.gain.cancelScheduledValues(t);
           v.g.gain.setValueAtTime(1e-5,t);
-          v.main?.forEach(nd=>{ try{ nd.stop(t+.01) }catch{} });
-          v.sub ?.forEach(nd=>{ try{ nd.stop(t+.01) }catch{} });
+          v.main?.forEach(nd=>{ try{ nd.stop(t+.02) }catch{} });
+          v.sub ?.forEach(nd=>{ try{ nd.stop(t+.02) }catch{} });
         }catch{}
       }
       voices.clear();
@@ -844,12 +902,13 @@ function makeSynth(a){
 }
 
 /* ===== Presets ===== */
-const PRESET_KEY='stagsynth_presets_v4';
+const PRESET_KEY='stagsynth_presets_v5';
 const PRESET_PARAMS=[
   'shape','subShape','detune','subDetune','subLevel','subOctave','noiseColor',
-  'cutoff','resonance','mode','a','d','s','r','drive','mix',
+  'mode','cutoff','resonance','a','d','s','r','drive','mix',
   'fx_rev_room','fx_rev_decay','fx_rev_predelay','fx_rev_damp','fx_rev_mix',
   'fx_ch_rate','fx_ch_depth','fx_ch_voices','fx_ch_width','fx_ch_mix',
+  'fx_dist_type','fx_dist_drive','fx_dist_tone','fx_dist_mix',
   'fx_comp_thr','fx_comp_ratio','fx_comp_att','fx_comp_rel','fx_comp_makeup',
   'fx_bc_bits','fx_bc_rate','fx_bc_mix',
   'fx_rm_freq','fx_rm_wave','fx_rm_depth','fx_rm_mix'
@@ -870,11 +929,14 @@ function initPresets(){
   const shareB=document.getElementById('shareLinkBtn');
   const msg=document.getElementById('presetMsg');
   let store=loadPresetStore();
+
   const incoming=(location.hash||'').match(/[#&]presets=([^&]+)/);
   if(incoming){ try{ const obj=JSON.parse(b64DecodeUnicode(incoming[1])); store={...store, ...obj}; savePresetStore(store); history.replaceState(null,'',location.pathname); }catch{} }
+
   if(Object.keys(store).length===0){ store['Init']=readUI(); savePresetStore(store); }
   function refresh(nm){ const prev=sel.value; sel.innerHTML=''; Object.keys(store).sort().forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); }); sel.value = nm ? nm : (prev || sel.value); }
   refresh('Init');
+
   saveB.onclick=()=>{ const nm=(name.value||'Preset').trim(); store[nm]=readUI(); savePresetStore(store); refresh(nm); };
   loadB.onclick=()=>{ applyPreset(store[sel.value]); };
   delB.onclick=()=>{ const nm=sel.value; delete store[nm]; savePresetStore(store); refresh(); };
@@ -892,9 +954,10 @@ function initPresets(){
 function pushParams(){
   if(!synth) return;
   [
-    'shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor',
+    'shape','subShape','detune','subDetune','mode','cutoff','resonance','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor',
     'fx_rev_room','fx_rev_decay','fx_rev_predelay','fx_rev_damp','fx_rev_mix',
     'fx_ch_rate','fx_ch_depth','fx_ch_voices','fx_ch_width','fx_ch_mix',
+    'fx_dist_type','fx_dist_drive','fx_dist_tone','fx_dist_mix',
     'fx_comp_thr','fx_comp_ratio','fx_comp_att','fx_comp_rel','fx_comp_makeup',
     'fx_bc_bits','fx_bc_rate','fx_bc_mix',
     'fx_rm_freq','fx_rm_wave','fx_rm_depth','fx_rm_mix'
@@ -951,7 +1014,6 @@ function bindBendAndMicro(){
     buildKeypad();
   });
 }
-
 /* ===== WebMIDI + CC Learn ===== */
 let midiAccess=null; let midiLearn=false, learnTarget=null;
 const MIDIMAP_KEY='stagsynth_midi_cc_map_v1'; let midiMapStore={ cc:{} };
@@ -1262,15 +1324,16 @@ function bindHeader(){
   const ml=document.getElementById('midiLearnBtn');
   ml.onclick=()=>{ if(ml.disabled) return; midiLearn=!midiLearn; learnTarget=null; if(midiLearn) ml.classList.add('midi-learn-on'); else ml.classList.remove('midi-learn-on'); document.getElementById('midiState').textContent = midiLearn ? 'Click a control, then move a CC' : 'MIDI map off'; };
 }
-function attachLearnClicks(){ document.querySelectorAll('[data-midicc]').forEach(el=>{ el.addEventListener('click', ()=>{ if(!midiLearn) return; document.querySelectorAll('[data-midicc]').forEach(e=>e.classList.remove('midi-learn-on')); learnTarget=el.id; el.classList.add('midi-learn-on'); }); }); }
 function bindMain(){
   const rd=document.getElementById('octReadout');
   document.getElementById('octUp').onclick=()=>{ octaveOffset=clamp(octaveOffset+1,-2,2); rd.textContent=String(octaveOffset); buildKeypad(); };
   document.getElementById('octDown').onclick=()=>{ octaveOffset=clamp(octaveOffset-1,-2,2); rd.textContent=String(octaveOffset); buildKeypad(); };
   buildKeypad(); bindKeyboard(); bindBendAndMicro();
-  ['shape','subShape','detune','subDetune','cutoff','resonance','mode','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor',
+  [
+   'shape','subShape','detune','subDetune','mode','cutoff','resonance','a','d','s','r','drive','mix','subLevel','subOctave','noiseColor',
    'fx_rev_room','fx_rev_decay','fx_rev_predelay','fx_rev_damp','fx_rev_mix',
    'fx_ch_rate','fx_ch_depth','fx_ch_voices','fx_ch_width','fx_ch_mix',
+   'fx_dist_type','fx_dist_drive','fx_dist_tone','fx_dist_mix',
    'fx_comp_thr','fx_comp_ratio','fx_comp_att','fx_comp_rel','fx_comp_makeup',
    'fx_bc_bits','fx_bc_rate','fx_bc_mix',
    'fx_rm_freq','fx_rm_wave','fx_rm_depth','fx_rm_mix'
@@ -1282,4 +1345,5 @@ document.addEventListener('DOMContentLoaded', main);
 </script>
 </body>
 </html>
+
 
