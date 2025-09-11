@@ -107,6 +107,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .kv{display:flex;gap:6px;align-items:center}
 .kv small{opacity:.8}
 .synth-btn.ll-on{outline:2px solid var(--accent); box-shadow:0 0 10px var(--accent);} 
+#llToggleOverlay{position:relative; z-index:12; pointer-events:auto}
 </style>
 </head>
 <body>
@@ -315,7 +316,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <button id="microBtn" class="synth-btn owl" title="Quartertone mode">
       <svg viewBox="0 0 100 100" width="22" height="22"><circle cx="50" cy="50" r="40" fill="none" stroke="#25ff85" stroke-width="8"/><text x="50" y="58" text-anchor="middle" font-size="42" fill="#25ff85">🦉</text></svg>
     </button>
-<button id="llToggleOverlay" class="synth-btn" aria-pressed="false" title="Low Latency Mode">LL</button>
+<button id="llToggleOverlay" type="button" class="synth-btn" role="switch" aria-checked="false" aria-pressed="false" title="Low Latency Mode">LL</button>
     <span id="midiState" class="badge" aria-live="polite"></span>
   </div>
   <div id="keypadWrap" class="keypad-wrap">
@@ -1345,27 +1346,27 @@ function bindMain(){
 function main(){ loadPresetStore(); loadTakes(); bindHeader(); bindMain(); initPresets(); bindGranularPanel(); bindSamplerPanel(); loadMidiMap(); }
 document.addEventListener('DOMContentLoaded', main);
 
-/* ==== Low Latency Mode (single overlay button, robust) ==== */
+/* ==== Low Latency Mode (robust toggle, desktop + mobile) ==== */
 (() => {
-  if (window.__LL_ONEBTN_PATCHED__) return; window.__LL_ONEBTN_PATCHED__ = true;
+  if (window.__LL_FINAL_PATCH__) return; window.__LL_FINAL_PATCH__ = true;
+
   let LOW_LATENCY = false;
+  let _lastToggleAt = 0;
 
   function reflectButton(on){
     const el = document.getElementById('llToggleOverlay');
-    if(el){ el.classList.toggle('ll-on', on); el.setAttribute('aria-pressed', on?'true':'false'); }
+    if(!el) return;
+    el.classList.toggle('ll-on', on);
+    el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    el.setAttribute('aria-checked', on ? 'true' : 'false');
   }
 
   function applyLowLatencyTweaks(on){
     LOW_LATENCY = !!on;
     reflectButton(LOW_LATENCY);
 
-    // 1) Smaller analyser buffer
     try{ if (typeof ai!=='undefined' && ai && ai.tap) ai.tap.fftSize = on ? 512 : 2048; }catch{}
-
-    // 2) Disconnect MediaStreamDestination unless recording
     try{ if (window.rec && window.rec.dest && !window.rec.active){ try{ window.rec.dest.disconnect(); }catch{} } }catch{}
-
-    // 3) Faster compressor envelope
     try{
       if (window.comp){
         window._compAttackDefault = window._compAttackDefault ?? comp.attack;
@@ -1374,8 +1375,6 @@ document.addEventListener('DOMContentLoaded', main);
         comp.release = on ? 0.06  : window._compReleaseDefault;
       }
     }catch{}
-
-    // 4) Cap chorus extremes
     try{
       const chRate=document.getElementById('fx_ch_rate');
       const chDepth=document.getElementById('fx_ch_depth');
@@ -1384,37 +1383,37 @@ document.addEventListener('DOMContentLoaded', main);
         if(chRate){ const v=Math.min(parseFloat(chRate.value)||2,2); if(v!=parseFloat(chRate.value||0)){ chRate.value=String(v); chRate.dispatchEvent(new Event('input',{bubbles:true})); } }
       }
     }catch{}
-
-    // 5) Lazy bitcrusher
     try{ window._bcLazy = on; }catch{}
 
-    if(window.DEBUG_LL) console.log('[LL] active:', LOW_LATENCY);
+    if (window.DEBUG_LL) console.log('[LL] state =', LOW_LATENCY);
   }
 
-  // Ensure the handler always binds (even after dynamic UI rebuilds)
-  function bindLLOverlayButton(){
+  function bindLL(){
     const btn = document.getElementById('llToggleOverlay');
     if(!btn) return;
-    const handler = (e)=>{ e.preventDefault(); e.stopPropagation(); applyLowLatencyTweaks(!LOW_LATENCY); };
-    // Remove existing listeners if re-binding
-    btn.replaceWith(btn.cloneNode(true));
-    const btn2 = document.getElementById('llToggleOverlay');
-    btn2.addEventListener('click', handler, {passive:false});
-    btn2.addEventListener('touchstart', handler, {passive:false});
-    btn2.addEventListener('pointerdown', handler, {passive:false});
+    const onPointerUp = (e) => {
+      const now = performance.now();
+      if (now - _lastToggleAt < 150) return; // debounce
+      _lastToggleAt = now;
+      e.preventDefault();
+      e.stopPropagation();
+      applyLowLatencyTweaks(!LOW_LATENCY);
+    };
+    const clone = btn.cloneNode(true);
+    btn.parentNode.replaceChild(clone, btn);
+    clone.addEventListener('pointerup', onPointerUp, {passive:false, capture:true});
+    clone.addEventListener('click', onPointerUp, {passive:false, capture:true});
+    clone.addEventListener('keydown', (ev)=>{ ev.stopPropagation(); }, {capture:true});
   }
 
-  // Hook: after ensureAudio(), re-bind in case UI changed
   const _ensure = window.ensureAudio;
   if(typeof _ensure === 'function'){
     window.ensureAudio = function(){
-      return _ensure().then(()=>{ bindLLOverlayButton(); });
+      return _ensure().then(()=>{ bindLL(); });
     }
   }
 
-  document.addEventListener('DOMContentLoaded', bindLLOverlayButton, {once:true});
-
-  // Public API (optional): window.toggleLL(true/false)
+  document.addEventListener('DOMContentLoaded', bindLL, {once:true});
   window.toggleLL = (on)=> applyLowLatencyTweaks(on==null ? !LOW_LATENCY : !!on);
 })();
 </script>
