@@ -111,15 +111,36 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 </style>
 
 <style>
-  /* Orientation helper */
+  /* Orientation helper v3 (Manual Speaker Mode) */
   #orientWrap {
     transform-origin: center center;
     transition: transform 150ms ease;
-    min-height: 100dvh; /* ensure full-height in all orientations */
+    min-height: 100dvh;
+    width: 100%;
   }
   #orientWrap.rot180 {
     transform: rotate(180deg);
   }
+
+  .speaker-toggle {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 999999; /* stay above app UI */
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1;
+    border-radius: 9999px;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .speaker-toggle:active { opacity: 0.85; }
 </style>
 
 </head>
@@ -1896,47 +1917,62 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 
 <script>
+// Orientation helper v3: Manual "iPhone Speaker Mode" (forces 180° app flip)
 (function(){
   function ensureWrapper(){
-    if (document.getElementById('orientWrap')) return;
+    if (document.getElementById('orientWrap')) return document.getElementById('orientWrap');
     const wrap = document.createElement('div');
     wrap.id = 'orientWrap';
+    // Move all existing body children into wrapper
     while (document.body.firstChild) wrap.appendChild(document.body.firstChild);
     document.body.appendChild(wrap);
+    return wrap;
   }
 
-  function getAngle(){
-    try {
-      if (screen.orientation && typeof screen.orientation.angle === 'number') {
-        return screen.orientation.angle || 0;
-      }
-    } catch(_) {}
-    if (typeof window.orientation === 'number') return window.orientation || 0;
-    return 0;
+  function ensureButton(wrap){
+    if (document.getElementById('speakerModeBtn')) return document.getElementById('speakerModeBtn');
+    const btn = document.createElement('button');
+    btn.id = 'speakerModeBtn';
+    btn.className = 'speaker-toggle';
+    btn.setAttribute('aria-pressed', 'false');
+    btn.title = 'Flip app 180° so your iPhone speaker can face up';
+    btn.textContent = 'Speaker Mode: OFF';
+    // Insert button inside wrapper so it rotates with the app content
+    wrap.appendChild(btn);
+    return btn;
   }
 
-  function updateOrientationClass(){
-    const wrap = document.getElementById('orientWrap');
-    if (!wrap) return;
-    const angle = getAngle();
-    if (angle === 180 || angle === -180) {
+  function applyState(wrap, enabled){
+    if (enabled) {
       wrap.classList.add('rot180');
     } else {
       wrap.classList.remove('rot180');
     }
-  }
-
-  function setVHVar(){
-    document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+    const btn = document.getElementById('speakerModeBtn');
+    if (btn) {
+      btn.textContent = enabled ? 'Speaker Mode: ON' : 'Speaker Mode: OFF';
+      btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    }
   }
 
   function bind(){
-    ensureWrapper();
-    updateOrientationClass();
-    setVHVar();
-    try { screen.orientation && screen.orientation.addEventListener('change', updateOrientationClass); } catch(_){}
-    window.addEventListener('orientationchange', updateOrientationClass);
-    window.addEventListener('resize', setVHVar, { passive: true });
+    const wrap = ensureWrapper();
+    const btn = ensureButton(wrap);
+
+    // Restore persisted state
+    let enabled = false;
+    try {
+      const saved = localStorage.getItem('speakerModeEnabled');
+      enabled = saved === 'true';
+    } catch (e) {}
+
+    applyState(wrap, enabled);
+
+    btn.addEventListener('click', function(){
+      enabled = !enabled;
+      applyState(wrap, enabled);
+      try { localStorage.setItem('speakerModeEnabled', String(enabled)); } catch(e) {}
+    }, { passive: true });
   }
 
   if (document.readyState === 'loading') {
