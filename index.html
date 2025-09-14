@@ -109,6 +109,19 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .synth-btn.ll-on{outline:2px solid var(--accent); box-shadow:0 0 10px var(--accent);} 
 #llToggleOverlay{position:relative; z-index:12; pointer-events:auto}
 </style>
+
+<style>
+  /* Orientation helper */
+  #orientWrap {
+    transform-origin: center center;
+    transition: transform 150ms ease;
+    min-height: 100dvh; /* ensure full-height in all orientations */
+  }
+  #orientWrap.rot180 {
+    transform: rotate(180deg);
+  }
+</style>
+
 </head>
 <body>
 <header class="topbar" id="topbar">
@@ -1880,6 +1893,59 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 </script>
 
+
+
+<script>
+(function(){
+  function ensureWrapper(){
+    if (document.getElementById('orientWrap')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'orientWrap';
+    while (document.body.firstChild) wrap.appendChild(document.body.firstChild);
+    document.body.appendChild(wrap);
+  }
+
+  function getAngle(){
+    try {
+      if (screen.orientation && typeof screen.orientation.angle === 'number') {
+        return screen.orientation.angle || 0;
+      }
+    } catch(_) {}
+    if (typeof window.orientation === 'number') return window.orientation || 0;
+    return 0;
+  }
+
+  function updateOrientationClass(){
+    const wrap = document.getElementById('orientWrap');
+    if (!wrap) return;
+    const angle = getAngle();
+    if (angle === 180 || angle === -180) {
+      wrap.classList.add('rot180');
+    } else {
+      wrap.classList.remove('rot180');
+    }
+  }
+
+  function setVHVar(){
+    document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+  }
+
+  function bind(){
+    ensureWrapper();
+    updateOrientationClass();
+    setVHVar();
+    try { screen.orientation && screen.orientation.addEventListener('change', updateOrientationClass); } catch(_){}
+    window.addEventListener('orientationchange', updateOrientationClass);
+    window.addEventListener('resize', setVHVar, { passive: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind, { once:true });
+  } else {
+    bind();
+  }
+})();
+</script>
 
 </body>
 </html>
