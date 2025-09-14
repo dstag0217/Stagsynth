@@ -121,6 +121,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <button id="synthToggle" class="synth-btn" aria-expanded="false" aria-controls="synthPanel">Synth</button>
     <button id="granularToggle" class="synth-btn" aria-expanded="false" aria-controls="granularPanel">Granular</button>
     <button id="samplerToggle" class="synth-btn" aria-expanded="false" aria-controls="samplerPanel">Sampler</button>
+    <button id="vocoderToggle" class="synth-btn" aria-expanded="false" aria-controls="vocoderPanel">Vocoder</button>
     <div style="display:flex;gap:6px;align-items:center">
       <button id="recBtn" class="pill dim" title="Record short take (whole output)">
         <span id="recDot"></span> <span id="recLabel">Record</span>
@@ -299,6 +300,44 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <label>Gain <input type="range" id="sam_gain" data-midicc min="0" max="1.5" step="0.01" value="0.9"/></label>
     <label>Cutoff <input type="range" id="sam_cut" data-midicc min="60" max="10000" step="1" value="10000"/></label>
     <label>Resonance <input type="range" id="sam_q" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
+  </div>
+</div>
+
+
+<!-- Vocoder panel (added) -->
+<div id="vocoderPanel" class="synth-panel" role="region" aria-label="Vocoder controls">
+  <div class="section">
+    <h4>Signal</h4>
+    <label>Carrier
+      <select id="voc_carrier" data-midicc>
+        <option value="off" selected>Off</option>
+        <option value="synth">Synth</option>
+        <option value="sampler">Sampler</option>
+        <option value="both">Both</option>
+      </select>
+    </label>
+    <label>Wet/Dry <input type="range" id="voc_mix" data-midicc min="0" max="1" step="0.01" value="0.0"/></label>
+    <label>Output Gain <input type="range" id="voc_out" data-midicc min="0" max="2" step="0.01" value="1.0"/></label>
+  </div>
+  <div class="section">
+    <h4>Bands</h4>
+    <label>Bands <select id="voc_bands"><option>8</option><option selected>12</option><option>16</option></select></label>
+    <label>Low Freq (Hz) <input type="range" id="voc_lo" min="120" max="600" step="1" value="200"/></label>
+    <label>High Freq (Hz) <input type="range" id="voc_hi" min="3000" max="12000" step="10" value="5000"/></label>
+    <label>Bandwidth (Q) <input type="range" id="voc_q" min="0.5" max="6" step="0.1" value="2.0"/></label>
+    <label>Formant Shift (st) <input type="range" id="voc_shift" min="-6" max="6" step="0.1" value="0"/></label>
+    <label>Sibilance Mix <input type="range" id="voc_sib" min="0" max="1" step="0.01" value="0.15"/></label>
+  </div>
+  <div class="section">
+    <h4>Modulator (Mic)</h4>
+    <label>Mod Gain <input type="range" id="voc_mod_gain" min="0" max="6" step="0.01" value="1.0"/></label>
+    <label>Gate (dB) <input type="range" id="voc_gate" min="-90" max="0" step="1" value="-70"/></label>
+    <label>Attack (ms) <input type="range" id="voc_att" min="0" max="200" step="1" value="12"/></label>
+    <label>Release (ms) <input type="range" id="voc_rel" min="20" max="1000" step="1" value="160"/></label>
+    <div style="grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button id="voc_test" class="synth-btn">Test Mic</button>
+      <span id="voc_status" class="badge"></span>
+    </div>
   </div>
 </div>
 
@@ -516,7 +555,8 @@ function makeDriveCurve(amount=0){
 /* ===== Bitcrusher Worklet (inline) ===== */
 let bitcrusherNode=null, bitcrusherMix=null;
 async function initBitcrusherWorklet(ctx){
-  if(ctx.audioWorklet && !ctx._bcRegistered){
+  if(ctx.audioWorklet && !ctx._bcRegistered && !ctx._bcLoading){
+    ctx._bcLoading=true;
     const code = `
       class BitcrusherProcessor extends AudioWorkletProcessor{
         static get parameterDescriptors(){
@@ -546,13 +586,14 @@ async function initBitcrusherWorklet(ctx){
           return true;
         }
       }
-      registerProcessor('bitcrusher-processor', BitcrusherProcessor);
+      try{ if(!globalThis.__bitcrusherRegistered){ registerProcessor('bitcrusher-processor', BitcrusherProcessor); globalThis.__bitcrusherRegistered=true; } }catch(e){ globalThis.__bitcrusherRegistered=true; }
     `;
     const blob = new Blob([code], {type:'application/javascript'});
     const url  = URL.createObjectURL(blob);
     await ctx.audioWorklet.addModule(url);
     URL.revokeObjectURL(url);
     ctx._bcRegistered = true;
+    ctx._bcLoading = false;
   }
 }
 
@@ -656,7 +697,7 @@ function makeSynth(a){
   /* === Compressor + Makeup → master limiter === */
   const comp = a.createDynamicsCompressor();
   const makeup = a.createGain(); makeup.gain.value=1.0;
-  revOut.connect(comp).connect(makeup).connect(mixNode);
+  const synthBus = a.createGain(); synthBus.gain.value=1.0; revOut.connect(comp).connect(makeup).connect(synthBus).connect(mixNode); try{ window._stagsynth_synthBus=synthBus; window._stagsynth_synthCtx=a; }catch{}
 
   // Start carriers/LFOs
   try{ rmCarrier.start(); chLFO1.start(); chLFO2.start(); }catch{}
@@ -1417,6 +1458,429 @@ document.addEventListener('DOMContentLoaded', main);
   window.toggleLL = (on)=> applyLowLatencyTweaks(on==null ? !LOW_LATENCY : !!on);
 })();
 </script>
+
+
+<script>
+(function(){
+  let vocCtx={ inited:false, bands:[], modStream:null, modSrc:null, modPre:null, sibHP:null, sibGain:null, envLPs:[], carBPFs:[], modBPFs:[], vcaGains:[], wet:null, dry:null, out:null, sum:null, carIn:null, modGate:null, modGain:null, carrierSel:'off' };
+  function hzForBand(i,N,lo,hi,semi){ const f=lo*Math.pow(hi/lo,i/(N-1)); return f*Math.pow(2,(semi||0)/12); }
+
+  async function ensureMic(){ if(vocCtx.modSrc) return true; try{ const ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false}); vocCtx.modStream=ms; await ensureAudio(); const a=audioCtx; vocCtx.modSrc=a.createMediaStreamSource(ms); vocCtx.modGain=a.createGain(); vocCtx.modGain.gain.value=parseFloat(document.getElementById('voc_mod_gain').value||1); vocCtx.modPre=a.createBiquadFilter(); vocCtx.modPre.type='highpass'; vocCtx.modPre.frequency.value=90; vocCtx.modGate=a.createDynamicsCompressor(); vocCtx.modGate.threshold.value=parseFloat(document.getElementById('voc_gate').value||-70); vocCtx.modGate.ratio.value=20; vocCtx.modGate.knee.value=0; vocCtx.modGate.attack.value=0.005; vocCtx.modGate.release.value=0.25; vocCtx.modSrc.connect(vocCtx.modGain).connect(vocCtx.modPre).connect(vocCtx.modGate); return true; }catch(e){ const s=document.getElementById('voc_status'); if(s) s.textContent='Mic permission denied'; return false; } }
+
+  function destroyBands(){ vocCtx.bands.forEach(b=>{ try{ b.modBPF.disconnect(); b.carBPF.disconnect(); b.envRect?.disconnect(); b.envLP.disconnect(); b.vca.disconnect(); }catch{} }); vocCtx.bands=[]; try{ vocCtx.sum?.disconnect(); }catch{} }
+
+  function rebuildVocoder(){ if(!window.audioCtx) return; const a=audioCtx; destroyBands(); if(!vocCtx.wet){ vocCtx.wet=a.createGain(); } if(!vocCtx.dry){ vocCtx.dry=a.createGain(); } if(!vocCtx.out){ vocCtx.out=a.createGain(); } if(!vocCtx.sum){ vocCtx.sum=a.createGain(); vocCtx.sum.gain.value=1; }
+    const N=parseInt(document.getElementById('voc_bands').value||12,10), lo=parseFloat(document.getElementById('voc_lo').value||200), hi=parseFloat(document.getElementById('voc_hi').value||5000), Q=parseFloat(document.getElementById('voc_q').value||2.0), sh=parseFloat(document.getElementById('voc_shift').value||0), att=Math.max(0.0005,(parseFloat(document.getElementById('voc_att').value||12))/1000), rel=Math.max(0.005,(parseFloat(document.getElementById('voc_rel').value||160))/1000);
+    vocCtx.wet.gain.value=parseFloat(document.getElementById('voc_mix').value||0); vocCtx.dry.gain.value=1-vocCtx.wet.gain.value; vocCtx.out.gain.value=parseFloat(document.getElementById('voc_out').value||1);
+    if(!vocCtx.sibHP){ vocCtx.sibHP=a.createBiquadFilter(); vocCtx.sibHP.type='highpass'; vocCtx.sibHP.frequency.value=5000; } if(!vocCtx.sibGain){ vocCtx.sibGain=a.createGain(); } vocCtx.sibGain.gain.value=parseFloat(document.getElementById('voc_sib').value||0.15);
+    for(let i=0;i<N;i++){ const fc=hzForBand(i,N,lo,hi,sh); const modBPF=a.createBiquadFilter(); modBPF.type='bandpass'; modBPF.Q.value=Q; modBPF.frequency.value=fc; const carBPF=a.createBiquadFilter(); carBPF.type='bandpass'; carBPF.Q.value=Q; carBPF.frequency.value=fc; const rect=a.createWaveShaper(); const n=2048,curve=new Float32Array(n); for(let j=0;j<n;j++){ const x=j/(n-1)*2-1; curve[j]=Math.abs(x);} rect.curve=curve; rect.oversample='2x'; const envLP=a.createBiquadFilter(); envLP.type='lowpass'; envLP.frequency.value=1/(2*Math.PI*att)*0.25; const vca=a.createGain(); vca.gain.value=0; vocCtx.modGate.connect(modBPF).connect(rect).connect(envLP); envLP.connect(vca.gain); vocCtx.carIn.connect(carBPF).connect(vca).connect(vocCtx.sum); vocCtx.bands.push({modBPF,carBPF,envRect:rect,envLP,vca}); }
+    vocCtx.modGate.connect(vocCtx.sibHP).connect(vocCtx.sibGain).connect(vocCtx.sum);
+    try{ vocCtx.wet.disconnect(); vocCtx.dry.disconnect(); vocCtx.out.disconnect(); }catch{}
+    vocCtx.sum.connect(vocCtx.wet).connect(vocCtx.out).connect(mixNode);
+  }
+
+  function waitForSynthBusAndWire(maxMs=4000){
+    const t0=performance.now();
+    (function tick(){
+      const bus=window._stagsynth_synthBus;
+      if(bus && vocCtx?.carIn){ try{ vocCtx.carIn.disconnect(); }catch{} bus.connect(vocCtx.carIn); console.log('[voc] carrier wired to synthBus'); return; }
+      if(performance.now()-t0<maxMs) requestAnimationFrame(tick);
+    })();
+  }
+
+  function setCarrier(sel){
+    vocCtx.carrierSel=sel; if(!window.audioCtx) return;
+    if(!vocCtx.carIn){ vocCtx.carIn=audioCtx.createGain(); vocCtx.carIn.gain.value=1; }
+    try{ vocCtx.carIn.disconnect(); }catch{}
+    const synthBus=window._stagsynth_synthBus;
+    const samOut=(typeof samplerBus==='object' && samplerBus.out) ? samplerBus.out : null;
+    if(sel==='synth'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); }
+    else if(sel==='sampler'){ if(samOut) samOut.connect(vocCtx.carIn); }
+    else if(sel==='both'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); if(samOut) samOut.connect(vocCtx.carIn); }
+  }
+
+  async function enableVocoderIfNeeded(){
+    const sel=document.getElementById('voc_carrier').value;
+    const needOn=(sel!=='off'); if(!needOn) return;
+    await ensureAudio(); const ok=await ensureMic(); if(!ok) return;
+    if(!vocCtx.inited){ vocCtx.inited=true; }
+    setCarrier(sel); rebuildVocoder();
+    const s=document.getElementById('voc_status'); if(s) s.textContent='Vocoder ready';
+  }
+
+  // Bind UI
+  document.addEventListener('DOMContentLoaded',()=>{
+    const btn=document.getElementById('vocoderToggle');
+    const panel=document.getElementById('vocoderPanel');
+    if(btn && panel){
+      btn.onclick=()=>{ const o=panel.classList.toggle('open'); btn.setAttribute('aria-expanded', o?'true':'false'); if(o) enableVocoderIfNeeded(); };
+    }
+    const id=s=>document.getElementById(s);
+    id('voc_carrier')?.addEventListener('change', async ()=>{ await enableVocoderIfNeeded(); setCarrier(vocCtx.carrierSel); });
+    ['voc_bands','voc_lo','voc_hi','voc_q','voc_shift','voc_att','voc_rel','voc_sib'].forEach(k=> id(k)?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off'){ rebuildVocoder(); }}));
+    id('voc_mix')?.addEventListener('input', ()=>{ const mix=parseFloat(id('voc_mix').value||0); if(vocCtx.wet) vocCtx.wet.gain.value=mix; if(vocCtx.dry) vocCtx.dry.gain.value=1-mix; });
+    id('voc_out')?.addEventListener('input', ()=>{ if(vocCtx.out) vocCtx.out.gain.value=parseFloat(id('voc_out').value||1); });
+    id('voc_mod_gain')?.addEventListener('input', ()=>{ if(vocCtx.modGain) vocCtx.modGain.gain.value=parseFloat(id('voc_mod_gain').value||1); });
+    id('voc_gate')?.addEventListener('input', ()=>{ if(vocCtx.modGate) vocCtx.modGate.threshold.value=parseFloat(id('voc_gate').value||-70); });
+    id('voc_att')?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off') rebuildVocoder(); });
+    id('voc_rel')?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off') rebuildVocoder(); });
+    id('voc_test')?.addEventListener('click', async ()=>{ const ok=await ensureMic(); const s=id('voc_status'); if(s) s.textContent= ok ? 'Mic OK' : 'Mic blocked'; });
+  });
+})();
+</script>
+
+
+
+<!-- Vocoder engine -->
+<script>
+(function(){
+  let vocCtx={ inited:false, bands:[], modStream:null, modSrc:null, modPre:null, sibHP:null, sibGain:null, envLPs:[], carBPFs:[], modBPFs:[], vcaGains:[], wet:null, dry:null, out:null, sum:null, carIn:null, modGate:null, modGain:null, carrierSel:'off' };
+  function hzForBand(i,N,lo,hi,semi){ const f=lo*Math.pow(hi/lo,i/(N-1)); return f*Math.pow(2,(semi||0)/12); }
+
+  async function ensureMic(){
+    if(vocCtx.modSrc) return true;
+    try{
+      const ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
+      vocCtx.modStream=ms;
+      await ensureAudio();
+      const a=audioCtx;
+      vocCtx.modSrc=a.createMediaStreamSource(ms);
+      vocCtx.modGain=a.createGain(); vocCtx.modGain.gain.value=parseFloat(document.getElementById('voc_mod_gain').value||1);
+      vocCtx.modPre=a.createBiquadFilter(); vocCtx.modPre.type='highpass'; vocCtx.modPre.frequency.value=90;
+      vocCtx.modGate=a.createDynamicsCompressor();
+      vocCtx.modGate.threshold.value=parseFloat(document.getElementById('voc_gate').value||-70);
+      vocCtx.modGate.ratio.value=20; vocCtx.modGate.knee.value=0; vocCtx.modGate.attack.value=0.005; vocCtx.modGate.release.value=0.25;
+      vocCtx.modSrc.connect(vocCtx.modGain).connect(vocCtx.modPre).connect(vocCtx.modGate);
+      return true;
+    }catch(e){
+      const s=document.getElementById('voc_status'); if(s) s.textContent='Mic permission denied';
+      return false;
+    }
+  }
+
+  function destroyBands(){
+    vocCtx.bands.forEach(b=>{ try{ b.modBPF.disconnect(); b.carBPF.disconnect(); b.envRect?.disconnect(); b.envLP.disconnect(); b.vca.disconnect(); }catch{} });
+    vocCtx.bands=[]; try{ vocCtx.sum?.disconnect(); }catch{}
+  }
+
+  function rebuildVocoder(){
+    if(!window.audioCtx) return;
+    const a=audioCtx;
+    destroyBands();
+    if(!vocCtx.wet){ vocCtx.wet=a.createGain(); }
+    if(!vocCtx.dry){ vocCtx.dry=a.createGain(); }
+    if(!vocCtx.out){ vocCtx.out=a.createGain(); }
+    if(!vocCtx.sum){ vocCtx.sum=a.createGain(); vocCtx.sum.gain.value=1; }
+
+    const N=parseInt(document.getElementById('voc_bands').value||12,10),
+          lo=parseFloat(document.getElementById('voc_lo').value||200),
+          hi=parseFloat(document.getElementById('voc_hi').value||5000),
+          Q=parseFloat(document.getElementById('voc_q').value||2.0),
+          sh=parseFloat(document.getElementById('voc_shift').value||0),
+          att=Math.max(0.0005,(parseFloat(document.getElementById('voc_att').value||12))/1000),
+          rel=Math.max(0.005,(parseFloat(document.getElementById('voc_rel').value||160))/1000);
+
+    vocCtx.wet.gain.value=parseFloat(document.getElementById('voc_mix').value||0);
+    vocCtx.dry.gain.value=1-vocCtx.wet.gain.value;
+    vocCtx.out.gain.value=parseFloat(document.getElementById('voc_out').value||1);
+
+    if(!vocCtx.sibHP){ vocCtx.sibHP=a.createBiquadFilter(); vocCtx.sibHP.type='highpass'; vocCtx.sibHP.frequency.value=5000; }
+    if(!vocCtx.sibGain){ vocCtx.sibGain=a.createGain(); }
+    vocCtx.sibGain.gain.value=parseFloat(document.getElementById('voc_sib').value||0.15);
+
+    for(let i=0;i<N;i++){
+      const fc=hzForBand(i,N,lo,hi,sh);
+      const modBPF=a.createBiquadFilter(); modBPF.type='bandpass'; modBPF.Q.value=Q; modBPF.frequency.value=fc;
+      const carBPF=a.createBiquadFilter(); carBPF.type='bandpass'; carBPF.Q.value=Q; carBPF.frequency.value=fc;
+      const rect=a.createWaveShaper(); const n=2048,curve=new Float32Array(n); for(let j=0;j<n;j++){ const x=j/(n-1)*2-1; curve[j]=Math.abs(x);} rect.curve=curve; rect.oversample='2x';
+      const envLP=a.createBiquadFilter(); envLP.type='lowpass'; envLP.frequency.value=1/(2*Math.PI*att)*0.25;
+      const vca=a.createGain(); vca.gain.value=0;
+      vocCtx.modGate.connect(modBPF).connect(rect).connect(envLP);
+      envLP.connect(vca.gain);
+      vocCtx.carIn.connect(carBPF).connect(vca).connect(vocCtx.sum);
+      vocCtx.bands.push({modBPF,carBPF,envRect:rect,envLP,vca});
+    }
+    vocCtx.modGate.connect(vocCtx.sibHP).connect(vocCtx.sibGain).connect(vocCtx.sum);
+
+    try{ vocCtx.wet.disconnect(); vocCtx.dry.disconnect(); vocCtx.out.disconnect(); }catch{}
+    vocCtx.sum.connect(vocCtx.wet).connect(vocCtx.out).connect(mixNode);
+  }
+
+  function waitForSynthBusAndWire(maxMs=4000){
+    const t0=performance.now();
+    (function tick(){
+      const bus=window._stagsynth_synthBus;
+      if(bus && vocCtx?.carIn){
+        try{ vocCtx.carIn.disconnect(); }catch{}
+        bus.connect(vocCtx.carIn);
+        console.log('[voc] carrier wired to synthBus');
+        return;
+      }
+      if(performance.now()-t0<maxMs) requestAnimationFrame(tick);
+    })();
+  }
+
+  function setCarrier(sel){
+    vocCtx.carrierSel=sel; if(!window.audioCtx) return;
+    if(!vocCtx.carIn){ vocCtx.carIn=audioCtx.createGain(); vocCtx.carIn.gain.value=1; }
+    try{ vocCtx.carIn.disconnect(); }catch{}
+    const synthBus=window._stagsynth_synthBus;
+    const samOut=(typeof samplerBus==='object' && samplerBus.out) ? samplerBus.out : null;
+    if(sel==='synth'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); }
+    else if(sel==='sampler'){ if(samOut) samOut.connect(vocCtx.carIn); }
+    else if(sel==='both'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); if(samOut) samOut.connect(vocCtx.carIn); }
+  }
+
+  async function enableVocoderIfNeeded(){
+    const sel=document.getElementById('voc_carrier').value;
+    const needOn=(sel!=='off'); if(!needOn) return;
+    await ensureAudio(); const ok=await ensureMic(); if(!ok) return;
+    if(!vocCtx.inited){ vocCtx.inited=true; }
+    setCarrier(sel);
+    rebuildVocoder();
+    const s=document.getElementById('voc_status'); if(s) s.textContent='Vocoder ready';
+  }
+
+  // Bind UI
+  document.addEventListener('DOMContentLoaded',()=>{
+    const btn=document.getElementById('vocoderToggle');
+    const panel=document.getElementById('vocoderPanel');
+    if(btn && panel){
+      btn.onclick=()=>{ const o=panel.classList.toggle('open'); btn.setAttribute('aria-expanded', o?'true':'false'); if(o) enableVocoderIfNeeded(); };
+    }
+    const id=s=>document.getElementById(s);
+    id('voc_carrier')?.addEventListener('change', async ()=>{ await enableVocoderIfNeeded(); setCarrier(vocCtx.carrierSel); });
+    ['voc_bands','voc_lo','voc_hi','voc_q','voc_shift','voc_att','voc_rel','voc_sib'].forEach(k=> id(k)?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off'){ rebuildVocoder(); }}));
+    id('voc_mix')?.addEventListener('input', ()=>{ const mix=parseFloat(id('voc_mix').value||0); if(vocCtx.wet) vocCtx.wet.gain.value=mix; if(vocCtx.dry) vocCtx.dry.gain.value=1-mix; });
+    id('voc_out')?.addEventListener('input', ()=>{ if(vocCtx.out) vocCtx.out.gain.value=parseFloat(id('voc_out').value||1); });
+    id('voc_mod_gain')?.addEventListener('input', ()=>{ if(vocCtx.modGain) vocCtx.modGain.gain.value=parseFloat(id('voc_mod_gain').value||1); });
+    id('voc_gate')?.addEventListener('input', ()=>{ if(vocCtx.modGate) vocCtx.modGate.threshold.value=parseFloat(id('voc_gate').value||-70); });
+    id('voc_att')?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off') rebuildVocoder(); });
+    id('voc_rel')?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off') rebuildVocoder(); });
+    id('voc_test')?.addEventListener('click', async ()=>{ const ok=await ensureMic(); const s=id('voc_status'); if(s) s.textContent= ok ? 'Mic OK' : 'Mic blocked'; });
+  });
+})();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  if(window.audioCtx && audioCtx.audioWorklet){
+    const aw=audioCtx.audioWorklet;
+    const orig=aw.addModule.bind(aw);
+    aw.addModule=async function(url, opts){
+      try{ return await orig(url, opts); }
+      catch(e){ if(String(e).includes('already registered')){ console.warn('[worklet] duplicate register ignored:', url); return; } throw e; }
+    };
+  }
+});
+</script>
+
+<script>
+/* ---- Safe pointer-capture: swallow NotFoundError without changing your handlers ---- */
+(function(){
+  if (!Element.prototype._setPointerCapturePatched) {
+    const _orig = Element.prototype.setPointerCapture;
+    if (_orig) {
+      Element.prototype.setPointerCapture = function(pointerId){
+        try { return _orig.call(this, pointerId); }
+        catch (e) {
+          // Ignore "No active pointer" race (common when mixed mouse/touch/pointer listeners run)
+          if (e && (e.name === 'NotFoundError' || String(e).includes('No active pointer'))) return;
+          throw e;
+        }
+      };
+    }
+    Element.prototype._setPointerCapturePatched = true;
+  }
+})();
+</script>
+
+<script>
+/* ========= Vocoder v2 (add-only) — uses your existing UI, zero changes elsewhere ========= */
+(function(){
+  if (window.__VocoderV2Mounted) return; window.__VocoderV2Mounted = true;
+  const $ = (id)=>document.getElementById(id);
+
+  let ctx=null, wet=null, out=null, noiseGain=null, noiseGen=null;
+  let bands=[], modHP=null, micStream=null, micSrc=null;
+
+  // Tuned defaults (you can keep using your UI to tweak)
+  const cfg = { nb:16, lo:160, hi:6000, attMs:12, relMs:120, envGain:3.0, noise:0.0, wet:0.6, out:1.0 };
+
+  // Wait for your audio engine (no changes to your code)
+  async function boot(){
+    if (!window.ensureAudio) return;
+    await ensureAudio();
+    ctx = window.audioCtx;
+    if (!ctx || !window.mixNode) return;
+
+    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch{} }
+
+    if (!wet) {
+      // Outputs
+      wet = ctx.createGain();   wet.gain.value = parseFloat($('#voc_wet')?.value ?? cfg.wet);
+      out = ctx.createGain();   out.gain.value = parseFloat($('#voc_out')?.value ?? cfg.out);
+      noiseGain = ctx.createGain(); noiseGain.gain.value = parseFloat($('#voc_noise')?.value ?? cfg.noise);
+
+      // Light noise to recover sibilants
+      noiseGen = ctx.createBufferSource();
+      const nbuf = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
+      const d = nbuf.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+      noiseGen.buffer = nbuf; noiseGen.loop = true; try{ noiseGen.start(); }catch{}
+      noiseGen.connect(noiseGain);
+
+      // Sum → your master bus
+      wet.connect(out);
+      noiseGain.connect(out);
+      out.connect(window.mixNode);
+
+      // Build and wire
+      readCfg(); rebuildBands(); connectRouting();
+    }
+  }
+
+  function readCfg(){
+    cfg.nb     = parseInt($('#voc_bands')?.value ?? cfg.nb, 10) || cfg.nb;
+    cfg.lo     = Math.max(40, parseFloat($('#voc_lo')?.value ?? cfg.lo));
+    cfg.hi     = Math.max(cfg.lo+200, parseFloat($('#voc_hi')?.value ?? cfg.hi));
+    cfg.attMs  = parseFloat($('#voc_att')?.value ?? cfg.attMs);
+    cfg.relMs  = parseFloat($('#voc_rel')?.value ?? cfg.relMs);
+    // Keep envGain internal; we bias it so the bands actually open
+  }
+
+  function destroyBands(){
+    bands.forEach(b=>{
+      try{ b.modBP.disconnect(); b.rect.disconnect(); b.envLP.disconnect(); b.envGain.disconnect(); b.carBP.disconnect(); b.mul.disconnect(); }catch{}
+    });
+    bands.length = 0;
+  }
+
+  function hz(i,n,lo,hi){ const t = n<=1 ? 0 : i/(n-1); return Math.exp(Math.log(lo) + t*(Math.log(hi)-Math.log(lo))); }
+
+  function rebuildBands(){
+    if (!ctx) return;
+    destroyBands();
+
+    for(let i=0;i<cfg.nb;i++){
+      const f = hz(i, cfg.nb, cfg.lo, cfg.hi);
+
+      // Modulator path: bandpass -> rectify -> lowpass (envelope) -> envGain (crucial!)
+      const modBP = ctx.createBiquadFilter(); modBP.type='bandpass'; modBP.frequency.value=f; modBP.Q.value=8;
+
+      const rect = ctx.createWaveShaper();
+      const curve = new Float32Array(65536);
+      for (let j=0;j<curve.length;j++){ const x=j/32768-1; curve[j]=Math.abs(x); }
+      rect.curve = curve;
+
+      const envLP = ctx.createBiquadFilter(); envLP.type='lowpass';
+      // Low cutoff gives a smooth envelope; attack/release are applied via coefficient math below
+      envLP.frequency.value = 60;
+
+      const envGain = ctx.createGain(); envGain.gain.value = cfg.envGain; // <-- boosts envelope amplitude
+
+      // Carrier path: bandpass
+      const carBP = ctx.createBiquadFilter(); carBP.type='bandpass'; carBP.frequency.value=f; carBP.Q.value=8;
+
+      // Multiply (envelope controls car band gain)
+      const mul = ctx.createGain(); mul.gain.value = 0;
+
+      // Wire per-band
+      modBP.connect(rect).connect(envLP).connect(envGain).connect(mul.gain);
+      carBP.connect(mul);
+      mul.connect(wet);
+
+      bands.push({modBP, rect, envLP, envGain, carBP, mul});
+    }
+  }
+
+  async function setMic(on){
+    const badge = $('#voc_micStatus');
+    if (on){
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+        });
+        micStream = stream; micSrc = ctx.createMediaStreamSource(stream);
+        modHP = ctx.createBiquadFilter(); modHP.type='highpass'; modHP.frequency.value = 120;
+        micSrc.connect(modHP);
+        if (badge) badge.textContent = 'Mic: on';
+      }catch(e){
+        if (badge) badge.textContent = 'Mic permission denied';
+      }
+    }else{
+      try{ micStream?.getTracks().forEach(t=>t.stop()); }catch{}
+      micStream=null; micSrc=null; modHP=null;
+      if (badge) badge.textContent = 'Mic: off';
+    }
+  }
+
+  function pickCarrier(){
+    const choice = $('#voc_carrier')?.value || 'synth';
+    // Prefer explicit sampler bus if chosen
+    if (choice==='sampler' && window.samplerBus?.out) return window.samplerBus.out;
+
+    // If your synth exposes a carrier tap, use it
+    try{
+      const tap = window.synth?.getVocoderCarrierTap?.();
+      if (tap) return tap;
+    }catch{}
+
+    // Safe fallback: pre-limiter mix (still produces vocoder effect)
+    return window.mixNode || null;
+  }
+
+  function connectRouting(){
+    // Disconnect prior
+    bands.forEach(b=>{ try{ b.modBP.disconnect(); }catch{} try{ b.carBP.disconnect(); }catch{} });
+
+    // Modulator (mic) → all mod bands
+    if (modHP){ bands.forEach(b=> modHP.connect(b.modBP)); }
+
+    // Carrier → all carrier bands
+    const car = pickCarrier();
+    if (car){ bands.forEach(b=> car.connect(b.carBP)); }
+
+    // Apply current gains
+    if (wet)       wet.gain.value       = parseFloat($('#voc_wet')?.value ?? cfg.wet);
+    if (out)       out.gain.value       = parseFloat($('#voc_out')?.value ?? cfg.out);
+    if (noiseGain) noiseGain.gain.value = parseFloat($('#voc_noise')?.value ?? cfg.noise);
+
+    // Optional: simple envelope “feel” by tweaking envLP frequency in relation to attack/release
+    const att = Math.max(0.001, (parseFloat($('#voc_att')?.value ?? cfg.attMs))/1000);
+    const rel = Math.max(0.005, (parseFloat($('#voc_rel')?.value ?? cfg.relMs))/1000);
+    const smoothHz = Math.max(20, 1/Math.max(att, rel)); // higher cutoff = faster envelope
+    bands.forEach(b=> b.envLP.frequency.value = smoothHz);
+  }
+
+  // Bind only your Vocoder controls; avoids touching other UI
+  function bindUI(){
+    $('#startBtn')?.addEventListener('click', boot);
+    $('#resetBtn')?.addEventListener('click', ()=> setTimeout(boot,50));
+
+    $('#voc_enableMic')?.addEventListener('change', async (e)=>{
+      await boot();
+      await setMic(e.target.checked);
+      connectRouting();
+    });
+    $('#voc_carrier')?.addEventListener('change', connectRouting);
+    $('#voc_wet')?.addEventListener('input',   ()=> { if (wet)  wet.gain.value  = parseFloat($('#voc_wet').value||'0'); });
+    $('#voc_out')?.addEventListener('input',   ()=> { if (out)  out.gain.value  = parseFloat($('#voc_out').value||'1'); });
+    $('#voc_noise')?.addEventListener('input', ()=> { if (noiseGain) noiseGain.gain.value = parseFloat($('#voc_noise').value||'0'); });
+
+    ['voc_bands','voc_lo','voc_hi','voc_att','voc_rel'].forEach(id=>{
+      $(id)?.addEventListener('input', ()=>{ readCfg(); rebuildBands(); connectRouting(); });
+    });
+    $('#voc_rebuild')?.addEventListener('click', ()=>{
+      readCfg(); rebuildBands(); connectRouting();
+      const s=$('#voc_status'); if(s){ s.textContent='Bands rebuilt'; setTimeout(()=>s.textContent='',1000); }
+    });
+  }
+
+  // Install listeners immediately; the nodes are created after Start Audio
+  bindUI();
+})();
+</script>
+
+
 </body>
 </html>
 
