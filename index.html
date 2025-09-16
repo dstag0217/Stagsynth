@@ -109,40 +109,6 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .synth-btn.ll-on{outline:2px solid var(--accent); box-shadow:0 0 10px var(--accent);} 
 #llToggleOverlay{position:relative; z-index:12; pointer-events:auto}
 </style>
-
-<style>
-  /* Orientation helper v3 (Manual Speaker Mode) */
-  #orientWrap {
-    transform-origin: center center;
-    transition: transform 150ms ease;
-    min-height: 100dvh;
-    width: 100%;
-  }
-  #orientWrap.rot180 {
-    transform: rotate(180deg);
-  }
-
-  .speaker-toggle {
-    position: fixed;
-    right: 12px;
-    bottom: 12px;
-    z-index: 999999; /* stay above app UI */
-    padding: 10px 14px;
-    font-family: inherit;
-    font-size: 14px;
-    line-height: 1;
-    border-radius: 9999px;
-    border: 1px solid rgba(255,255,255,0.25);
-    background: rgba(0,0,0,0.5);
-    color: #fff;
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
-    user-select: none;
-    touch-action: manipulation;
-  }
-  .speaker-toggle:active { opacity: 0.85; }
-</style>
-
 </head>
 <body>
 <header class="topbar" id="topbar">
@@ -390,6 +356,8 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
       <svg viewBox="0 0 100 100" width="22" height="22"><circle cx="50" cy="50" r="40" fill="none" stroke="#25ff85" stroke-width="8"/><text x="50" y="58" text-anchor="middle" font-size="42" fill="#25ff85">🦉</text></svg>
     </button>
 <button id="llToggleOverlay" type="button" class="synth-btn" role="switch" aria-checked="false" aria-pressed="false" title="Low Latency Mode">LL</button>
+    <button id="stageModeBtn" type="button" class="synth-btn" role="switch" aria-checked="false" aria-pressed="false" title="LL + Gig Boost preset">Stage&nbsp;Mode</button>
+    <button id="gigBoostBtn" type="button" class="synth-btn" role="switch" aria-checked="false" aria-pressed="false" title="Live: cut & loud">Gig&nbsp;Boost</button>
     <span id="midiState" class="badge" aria-live="polite"></span>
   </div>
   <div id="keypadWrap" class="keypad-wrap">
@@ -427,21 +395,66 @@ const TAKES_KEY='stagsynth_takes_v5';
 function loadTakes(){ try{ return JSON.parse(localStorage.getItem(TAKES_KEY)||'{}'); }catch{return{}} }
 function saveTakes(o){ try{ localStorage.setItem(TAKES_KEY, JSON.stringify(o)); }catch{} }
 /* ===== Setup / teardown ===== */
+
 function setupRecordingBus(){
   const a=audioCtx;
   mixNode=a.createGain(); mixNode.gain.value=.95;
 
+  // Master conditioning: DC blocker + subsonic HPF
+  dcBlock=a.createBiquadFilter(); dcBlock.type='highpass'; dcBlock.frequency.value=18; dcBlock.Q.value=0.707;
+  subTamer=a.createBiquadFilter(); subTamer.type='highpass'; subTamer.frequency.value=30; subTamer.Q.value=0.707;
+
+  // Gig Boost tone/psychoacoustics (always inline; gains controlled by UI toggle)
+  mastIn=a.createGain();
+  lowShelf=a.createBiquadFilter(); lowShelf.type='lowshelf'; lowShelf.frequency.value=140; lowShelf.gain.value=-1.5;
+  presenceEQ=a.createBiquadFilter(); presenceEQ.type='peaking'; presenceEQ.frequency.value=3200; presenceEQ.Q.value=0.8; presenceEQ.gain.value=1.8;
+  hiShelf=a.createBiquadFilter(); hiShelf.type='highshelf'; hiShelf.frequency.value=9000; hiShelf.gain.value=1.2;
+
+  // Parallel exciter (band-limited soft saturation)
+  excBand=a.createBiquadFilter(); excBand.type='bandpass'; excBand.frequency.value=2800; excBand.Q.value=0.9;
+  excPre=a.createGain(); excPre.gain.value=2.5;
+  excWS=a.createWaveShaper();
+  (function(){
+    const n=44100, c=new Float32Array(n);
+    for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=Math.tanh(2.2*x); }
+    excWS.curve=c;
+  })();
+  excPost=a.createGain(); excPost.gain.value=0.12;
+
+  mastSum=a.createGain();
+
+  // Optional high-band width
+  splitHP=a.createBiquadFilter(); splitHP.type='highpass'; splitHP.frequency.value=1200;
+  splitter=a.createChannelSplitter(2);
+  merger=a.createChannelMerger(2);
+  widL=a.createGain(); widR=a.createGain(); widL.gain.value=1.0; widR.gain.value=1.0;
+  widMix=a.createGain(); widMix.gain.value=0.15;
+
   // Safety limiter at the very end
   limiter=a.createDynamicsCompressor();
-  limiter.threshold.value=-10; limiter.knee.value=20; limiter.ratio.value=8;
-  limiter.attack.value=0.003; limiter.release.value=0.25;
+  limiter.threshold.value=-7; limiter.knee.value=24; limiter.ratio.value=20;
+  limiter.attack.value=0.002; limiter.release.value=0.20;
 
-  mixNode.connect(limiter).connect(a.destination);
+  // Wiring: mixNode -> DC/sub -> mastIn -> tone EQ (+parallel) -> mastSum -> limiter -> destination
+  mixNode.connect(dcBlock).connect(subTamer).connect(mastIn);
+  mastIn.connect(lowShelf).connect(presenceEQ).connect(hiShelf).connect(mastSum);
+
+  // parallel exciter
+  mastIn.connect(excBand).connect(excPre).connect(excWS).connect(excPost).connect(mastSum);
+
+  // high-band width (optional)
+  presenceEQ.connect(splitHP).connect(splitter);
+  splitter.connect(widL, 0); splitter.connect(widR, 1);
+  merger.connect(widMix).connect(mastSum);
+  widL.connect(merger, 0, 0); widR.connect(merger, 0, 1);
+
+  mastSum.connect(limiter).connect(a.destination);
 
   // Recorder taps the post-limiter signal so captured audio matches what you hear
   mediaStreamDest=a.createMediaStreamDestination();
   limiter.connect(mediaStreamDest);
 }
+
 
 /* Choose recording mime that works broadly; iOS-friendly first */
 function pickBestAudioMime(){
@@ -561,6 +574,18 @@ function ensureAudio(){
   pushParams();
   return Promise.resolve(true);
 }
+
+
+// === Utility: fast parameter smoothing to avoid zipper noise ===
+function setParamSmooth(param, value, time, tau){
+  try{
+    const a = audioCtx || window._stagsynth_synthCtx;
+    const t = time || (a?.currentTime || 0);
+    const k = (typeof tau === 'number') ? tau : 0.008;
+    param.cancelScheduledValues?.(t);
+    param.setTargetAtTime?.(value, t, k);
+  }catch(e){ try{ param.value = value; }catch{} }
+}
 async function hardResetAudio(){
   try{ stopTopRecording(); }catch{}
   try{ stopGranular(true); }catch{}
@@ -638,13 +663,13 @@ function makeSynth(a){
 
   /* === ALWAYS-IN-PATH CORE FILTER === */
   const coreFilter = a.createBiquadFilter();
-  coreFilter.type='lowpass'; coreFilter.frequency.value=1600; coreFilter.Q.value=0.2;
+  coreFilter.type='lowpass'; coreFilter.frequency.value = 1600; coreFilter.Q.value = 4;
 
   /* === Optional COLOR bus (drive + wet/dry) AFTER core filter === */
   const colorDry = a.createGain(); colorDry.gain.value=1.0;
   const colorWet = a.createGain(); colorWet.gain.value=0.0;
   const colorSum = a.createGain();
-  const colorFilter = a.createBiquadFilter(); colorFilter.type='lowpass'; colorFilter.frequency.value=1600; colorFilter.Q.value=0.2;
+  const colorFilter = a.createBiquadFilter(); colorFilter.type='lowpass'; setParamSmooth(colorFilter.frequency, coreFilter.frequency.value); setParamSmooth(colorFilter.Q, coreFilter.Q.value*0.6);
   const colorShaper = a.createWaveShaper(); colorShaper.curve = makeDriveCurve(0);
 
   // coreFilter → (dry→sum) + (filter→shaper→wet→sum)
@@ -673,7 +698,8 @@ function makeSynth(a){
   const chDry = a.createGain(); chDry.gain.value=1.0;
   const chWet = a.createGain(); chWet.gain.value=0.0;
   const chOut = a.createGain();
-  const chDelayL = a.createDelay(0.05), chDelayR = a.createDelay(0.05);
+  const chWetHP = a.createBiquadFilter(); chWetHP.type="highpass"; chWetHP.frequency.value=180;
+const chDelayL = a.createDelay(0.05), chDelayR = a.createDelay(0.05);
   const chLFO1 = a.createOscillator(), chLFO2 = a.createOscillator();
   const chDepthL = a.createGain(), chDepthR = a.createGain();
   chLFO1.type='sine'; chLFO2.type='sine';
@@ -683,7 +709,7 @@ function makeSynth(a){
   chIn.connect(chDelayL).connect(chWet);
   chIn.connect(chDelayR).connect(chWet);
   chIn.connect(chDry);
-  chDry.connect(chOut); chWet.connect(chOut);
+  chDry.connect(chOut); chWet.connect(chWetHP).connect(chOut);
   chLFO1.connect(chDepthL).connect(chDelayL.delayTime);
   chLFO2.connect(chDepthR).connect(chDelayR.delayTime);
 
@@ -692,13 +718,15 @@ function makeSynth(a){
   const distPre = a.createGain();
   const distWS  = a.createWaveShaper();
   const distTone= a.createBiquadFilter(); distTone.type='lowpass'; distTone.frequency.value=20000;
-  const distDry = a.createGain(); distDry.gain.value=1.0;
+  const preEmph = a.createBiquadFilter(); preEmph.type='highshelf'; preEmph.frequency.value=1600; preEmph.gain.value=3;
+  const deEmph = a.createBiquadFilter(); deEmph.type='highshelf'; deEmph.frequency.value=1600; deEmph.gain.value=-3;
+const distDry = a.createGain(); distDry.gain.value=1.0;
   const distWet = a.createGain(); distWet.gain.value=0.0;
   const distSum = a.createGain();
 
   chOut.connect(distIn);
   distIn.connect(distDry).connect(distSum);
-  distIn.connect(distPre).connect(distWS).connect(distTone).connect(distWet).connect(distSum);
+  distIn.connect(preEmph).connect(distPre).connect(distWS).connect(distTone).connect(deEmph).connect(distWet).connect(distSum);
 
   /* === Bitcrusher (worklet) with MIX === */
   const bcIn  = a.createGain();
@@ -728,10 +756,12 @@ function makeSynth(a){
   revIn.connect(revDry).connect(revOut);
   revIn.connect(revPre).connect(revConv).connect(revDamp).connect(revWet).connect(revOut);
 
+  const presence = a.createBiquadFilter(); presence.type="peaking"; presence.frequency.value=3200; presence.Q.value=0.7; presence.gain.value=1.8;
+
   /* === Compressor + Makeup → master limiter === */
   const comp = a.createDynamicsCompressor();
   const makeup = a.createGain(); makeup.gain.value=1.0;
-  const synthBus = a.createGain(); synthBus.gain.value=1.0; revOut.connect(comp).connect(makeup).connect(synthBus).connect(mixNode); try{ window._stagsynth_synthBus=synthBus; window._stagsynth_synthCtx=a; }catch{}
+  const synthBus = a.createGain(); synthBus.gain.value=1.0; revOut.connect(presence).connect(comp).connect(makeup).connect(synthBus).connect(mixNode); try{ window._stagsynth_synthBus=synthBus; window._stagsynth_synthCtx=a; }catch{}
 
   // Start carriers/LFOs
   try{ rmCarrier.start(); chLFO1.start(); chLFO2.start(); }catch{}
@@ -770,12 +800,12 @@ function makeSynth(a){
   // ===== Setters =====
   function applyCoreFilter(){
     coreFilter.type = (params.mode==='hp')?'highpass' : (params.mode==='bp')?'bandpass' : 'lowpass';
-    coreFilter.frequency.value = Math.max(40, params.cutoff||1600);
-    coreFilter.Q.value = Math.max(0, Math.min(20, (params.resonance||0.2)*20));
+    setParamSmooth(coreFilter.frequency, Math.max(40, params.cutoff||1600));
+    setParamSmooth(coreFilter.Q, Math.max(0, Math.min(20, (params.resonance||0.2)*20)));
     // color prefilter follows core tone so drive coloration tracks
     colorFilter.type = coreFilter.type;
-    colorFilter.frequency.value = coreFilter.frequency.value;
-    colorFilter.Q.value = coreFilter.Q.value*0.6;
+    setParamSmooth(colorFilter.frequency, coreFilter.frequency.value);
+    setParamSmooth(colorFilter.Q, coreFilter.Q.value*0.6);
   }
   function setColor(){
     colorShaper.curve = makeDriveCurve(Math.max(0, Math.min(1, params.drive||0)));
@@ -1915,75 +1945,59 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 
-
-<script>
-// Orientation helper v3: Manual "iPhone Speaker Mode" (forces 180° app flip)
-(function(){
-  function ensureWrapper(){
-    if (document.getElementById('orientWrap')) return document.getElementById('orientWrap');
-    const wrap = document.createElement('div');
-    wrap.id = 'orientWrap';
-    // Move all existing body children into wrapper
-    while (document.body.firstChild) wrap.appendChild(document.body.firstChild);
-    document.body.appendChild(wrap);
-    return wrap;
-  }
-
-  function ensureButton(wrap){
-    if (document.getElementById('speakerModeBtn')) return document.getElementById('speakerModeBtn');
-    const btn = document.createElement('button');
-    btn.id = 'speakerModeBtn';
-    btn.className = 'speaker-toggle';
-    btn.setAttribute('aria-pressed', 'false');
-    btn.title = 'Flip app 180° so your iPhone speaker can face up';
-    btn.textContent = 'Speaker Mode: OFF';
-    // Insert button inside wrapper so it rotates with the app content
-    wrap.appendChild(btn);
-    return btn;
-  }
-
-  function applyState(wrap, enabled){
-    if (enabled) {
-      wrap.classList.add('rot180');
-    } else {
-      wrap.classList.remove('rot180');
-    }
-    const btn = document.getElementById('speakerModeBtn');
-    if (btn) {
-      btn.textContent = enabled ? 'Speaker Mode: ON' : 'Speaker Mode: OFF';
-      btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-    }
-  }
-
-  function bind(){
-    const wrap = ensureWrapper();
-    const btn = ensureButton(wrap);
-
-    // Restore persisted state
-    let enabled = false;
-    try {
-      const saved = localStorage.getItem('speakerModeEnabled');
-      enabled = saved === 'true';
-    } catch (e) {}
-
-    applyState(wrap, enabled);
-
-    btn.addEventListener('click', function(){
-      enabled = !enabled;
-      applyState(wrap, enabled);
-      try { localStorage.setItem('speakerModeEnabled', String(enabled)); } catch(e) {}
-    }, { passive: true });
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bind, { once:true });
-  } else {
-    bind();
-  }
-})();
-</script>
-
 </body>
 </html>
 
 
+
+<script>
+
+// === Gig Boost toggle ===
+let gigOn = false;
+function setGigBoost(on){
+  gigOn = !!on;
+  try{
+    lowShelf.gain.value   = on ? -2.0 : -1.5;
+    presenceEQ.gain.value = on ?  3.0 :  1.8;
+    hiShelf.gain.value    = on ?  2.0 :  1.2;
+    excPost.gain.value    = on ?  0.20:  0.12;
+    widL.gain.value       = on ?  1.08:  1.00;
+    widR.gain.value       = on ?  1.08:  1.00;
+    limiter.threshold.value=on ? -8   : -7;
+  }catch{}
+  const b = document.getElementById('gigBoostBtn');
+  if(b){
+    b.setAttribute('aria-checked', String(on));
+    b.setAttribute('aria-pressed', String(on));
+    b.classList.toggle('ll-on', on);
+  }
+}
+document.getElementById('gigBoostBtn')?.addEventListener('click', ()=> setGigBoost(!gigOn));
+
+</script>
+<script>
+// === Stage Mode: toggles Low Latency + Gig Boost together ===
+let stageOn = false;
+async function setStageMode(on){
+  stageOn = !!on;
+  try{
+    await (window.ensureAudio?.() || Promise.resolve());
+    // Low latency on/off
+    if (typeof applyLowLatencyTweaks === 'function'){
+      applyLowLatencyTweaks(stageOn);
+    }
+    // Gig boost on/off
+    if (typeof setGigBoost === 'function'){
+      setGigBoost(stageOn);
+    }
+  }catch{}
+  const b = document.getElementById('stageModeBtn');
+  if(b){
+    b.setAttribute('aria-checked', String(stageOn));
+    b.setAttribute('aria-pressed', String(stageOn));
+    b.classList.toggle('ll-on', stageOn);
+  }
+}
+document.getElementById('stageModeBtn')?.addEventListener('click', ()=> setStageMode(!stageOn));
+</script>
+</body></html>
