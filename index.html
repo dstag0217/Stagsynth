@@ -136,7 +136,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     position:absolute; inset:0; pointer-events:none; z-index:6;
   }
   .peri-led{
-    position:absolute; width:34px; height:34px; border-radius:10px;
+    position:absolute; width:28px; height:14px; border-radius:8px;
     background:linear-gradient(#353535,#1a1a1a);
     box-shadow:inset 0 0 0 2px rgba(255,255,255,.08), 0 1px 2px rgba(0,0,0,.6);
     pointer-events:auto; touch-action:manipulation;
@@ -2229,12 +2229,23 @@ function attachStripClick(){
     if(!b || b.__bound) return;
     b.__bound = true;
     b.addEventListener('click', (e)=>{
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       try{ if(window.pattern) window.pattern.clear(); }catch{}
       try{ if(typeof window.setPlay==='function') window.setPlay(false); }catch{}
       try{ if(typeof window.step!=='undefined') window.step = 0; }catch{}
-      try{ if(typeof window.renderHighlights==='function') window.renderHighlights(window.step||0, window.PLAY); }catch{}
+      try{ if(typeof window.renderHighlights==='function') window.renderHighlights(window.step||0, false); }catch{}
     });
+    // Fallback: delegated handler in case button gets rebuilt
+    document.addEventListener('click', function(ev){
+      const t = ev.target; if(!t) return;
+      if(t.id === 'seqClearBtn'){
+        ev.preventDefault(); ev.stopPropagation();
+        try{ if(window.pattern) window.pattern.clear(); }catch{}
+        try{ if(typeof window.setPlay==='function') window.setPlay(false); }catch{}
+        try{ if(typeof window.step!=='undefined') window.step = 0; }catch{}
+        try{ if(typeof window.renderHighlights==='function') window.renderHighlights(window.step||0, false); }catch{}
+      }
+    }, true);
   }
 
   function ensurePerimeter(){
@@ -2243,44 +2254,63 @@ function attachStripClick(){
     if(!wrap) return;
     if(!peri) peri = document.getElementById('seqStepsPerimeter');
     if(!peri) return;
+    // Only visible/clickable when Sequencer overlay is ON
+    if(!(window.ON)) { peri.style.display='none'; return; }
+    peri.style.display='block';
+
     const L = (typeof window.len==='function') ? window.len() : 16;
     // Rebuild if different count
     if(peri.childElementCount !== L){
       peri.innerHTML = '';
       const r = wrap.getBoundingClientRect();
       const w = r.width, h = r.height;
-      const inset = 6, size = 34;
-      const topY = inset, bottomY = h - inset - size;
-      const leftX = inset, rightX = w - inset - size;
-      const topCount = Math.max(4, Math.floor((w-2*inset)/(size+4)));
+      const inset = 6, bw = 28, bh = 14; // base widths/heights for slim bars
+      const topY = inset, bottomY = h - inset - bh;
+      const leftX = inset, rightX = w - inset - bh; // note: vertical bars use bh as width
+      const topCount = Math.max(4, Math.floor((w-2*inset)/(bw+4)));
       const bottomCount = topCount;
-      const sideCount = Math.max(4, Math.floor((h-2*inset)/(size+4)));
+      const sideCount = Math.max(4, Math.floor((h-2*inset)/(bw+4)));
       const totalSlots = topCount + bottomCount + 2*sideCount;
       for(let i=0;i<L;i++){
         const d = document.createElement('div');
         d.className = 'peri-led'; d.dataset.index = String(i);
         const t = i / L * totalSlots;
         const slot = Math.floor(t);
-        let x=0,y=0;
+        let x=0,y=0, isTop=false, isRight=false, isBottom=false, isLeft=false;
         if(slot < topCount){
-          x = leftX + slot * ((w-2*inset - size) / Math.max(1, topCount-1));
+          // top: left -> right
+          isTop = true;
+          x = leftX + slot * ((w-2*inset - bw) / Math.max(1, topCount-1));
           y = topY;
+          d.style.width = bw + 'px'; d.style.height = bh + 'px';
         }else if(slot < topCount + sideCount){
+          // right: top -> bottom
+          isRight = true;
           const k = slot - topCount;
-          x = rightX; y = topY + k * ((h-2*inset - size) / Math.max(1, sideCount-1));
+          x = rightX; y = topY + k * ((h-2*inset - bw) / Math.max(1, sideCount-1));
+          d.style.width = bh + 'px'; d.style.height = bw + 'px';
         }else if(slot < topCount + sideCount + bottomCount){
+          // bottom: right -> left
+          isBottom = true;
           const k = slot - topCount - sideCount;
-          x = rightX - k * ((w-2*inset - size) / Math.max(1, bottomCount-1));
+          x = rightX - k * ((w-2*inset - bw) / Math.max(1, bottomCount-1));
           y = bottomY;
+          d.style.width = bw + 'px'; d.style.height = bh + 'px';
         }else{
+          // left: bottom -> top
+          isLeft = true;
           const k = slot - topCount - sideCount - bottomCount;
-          x = leftX; y = bottomY - k * ((h-2*inset - size) / Math.max(1, sideCount-1));
+          x = leftX; y = bottomY - k * ((h-2*inset - bw) / Math.max(1, sideCount-1));
+          d.style.width = bh + 'px'; d.style.height = bw + 'px';
         }
         d.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
         peri.appendChild(d);
       }
-      // interactions
+
+      // interactions (only when ON)
+      peri.onclick = null; peri.ondblclick = null;
       peri.addEventListener('click', (e)=>{
+        if(!(window.ON)) return;
         const d = e.target.closest('.peri-led'); if(!d) return;
         const i = +d.dataset.index;
         try{ if(typeof window.setPlay==='function') window.setPlay(false); }catch{}
@@ -2290,6 +2320,7 @@ function attachStripClick(){
 
       // double to clear (desktop double-click + mobile double-tap)
       peri.addEventListener('dblclick', (e)=>{
+        if(!(window.ON)) return;
         const d = e.target.closest('.peri-led'); if(!d) return;
         const i = +d.dataset.index;
         try{ if(window.pattern) window.pattern.delete(i); }catch{}
@@ -2299,6 +2330,7 @@ function attachStripClick(){
       }, true);
       let last=-1, lastT=0;
       peri.addEventListener('pointerdown', (e)=>{
+        if(!(window.ON)) return;
         const d = e.target.closest('.peri-led'); if(!d) return;
         const i = +d.dataset.index;
         const now = performance.now();
@@ -2316,7 +2348,8 @@ function attachStripClick(){
     }
   }
 
-  // Wrap renderHighlights to also update perimeter LEDs without touching original logic
+  // Wrap renderHighlights
+ to also update perimeter LEDs without touching original logic
   if(typeof window.renderHighlights === 'function' && !window.__periWrapped){
     window.__periWrapped = true;
     const old = window.renderHighlights;
@@ -2324,6 +2357,7 @@ function attachStripClick(){
       try{ old(currentIdx, playing); }catch(e){}
       try{
         if(!isPhone()) return;
+        if(!(window.ON)){ if(peri) peri.style.display='none'; return; }
         ensurePerimeter();
         const L = (typeof window.len==='function') ? window.len() : 16;
         const nodes = $$('.peri-led', peri||document);
@@ -2343,6 +2377,7 @@ function attachStripClick(){
   }
 
   function kick(){
+
     bindClear();
     ensurePerimeter();
     try{ if(typeof window.renderHighlights==='function') window.renderHighlights(window.step||0, window.PLAY); }catch(e){}
