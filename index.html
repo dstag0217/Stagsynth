@@ -7,12 +7,6 @@
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="%23ff2727" stroke-width="6"/><text x="32" y="42" text-anchor="middle" font-size="32" fill="%23ff2727">🦉</text></svg>' />
 <style>
 /* ===== Theme ===== */
-
-/* Custom panel tweaks */
-#customPanel label{ display:flex; gap:6px; align-items:center }
-#custom_partials .partial{ display:flex; gap:4px; align-items:center }
-#custom_partials .partial label{ width:auto }
-
 :root{
   --bg1:#2b0000; --bg2:#060004;
   --panel:#0e0a0a; --panel2:#1a1212;
@@ -114,22 +108,6 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .kv small{opacity:.8}
 .synth-btn.ll-on{outline:2px solid var(--accent); box-shadow:0 0 10px var(--accent);} 
 #llToggleOverlay{position:relative; z-index:12; pointer-events:auto}
-
-/* === Mobile-friendly sequencer perimeter === */
-@media (max-width: 740px){
-  #seqStepsStrip{ display:none !important; }
-  #seqStepsPerimeter{ display:block; position:absolute; inset:0; pointer-events:none; }
-  #keypadWrap{ position:relative; }
-  .peri-led{
-    position:absolute; width:34px; height:34px; border-radius:10px;
-    background:linear-gradient(#303030,#1a1a1a);
-    box-shadow:inset 0 0 0 2px rgba(255,255,255,.08), 0 1px 2px rgba(0,0,0,.6);
-    pointer-events:auto; touch-action:manipulation;
-  }
-  .peri-led.active{ box-shadow:inset 0 0 0 2px rgba(255,211,77,.9), 0 0 8px rgba(255,211,77,.6); }
-  .peri-led.has{ background:linear-gradient(#454545,#252525); }
-  .peri-led.play{ background:#ff7a0033; }
-}
 </style>
 
 <style>
@@ -171,7 +149,6 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
   <h1>StagSynth</h1>
   <div class="tb-row">
     <button id="startBtn" class="synth-btn" title="Start or Resume Audio">Start Audio</button>
-<button id="customToggle" class="synth-btn" aria-expanded="false" aria-controls="customPanel">Custom</button>
     <button id="resetBtn" class="synth-btn" title="Reset Audio Engine (close & reinit)">Reset Audio</button>
     <button id="midiBtn" class="synth-btn" title="Connect MIDI (USB/BLE)">𝄞 MIDI</button>
     <button id="midiLearnBtn" class="synth-btn" title="MIDI CC Learn" disabled>MIDI Map</button>
@@ -412,40 +389,6 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
   </div>
 </div>
 
-
-<!-- Custom panel -->
-<div id="customPanel" class="synth-panel" role="region" aria-label="Custom synthesis" style="display:none">
-  <div class="section">
-    <h4>Custom</h4>
-    <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center">
-      <label>Mode
-        <select id="custom_mode">
-          <option value="draw">Draw</option>
-          <option value="formula">Formula</option>
-          <option value="additive">Additive</option>
-        </select>
-      </label>
-      <label>Harmonics <input id="custom_harmonics" type="number" min="1" max="64" step="1" value="16"/></label>
-      <label>Name <input id="custom_name" type="text" placeholder="MyWave"/></label>
-      <button id="custom_export" class="synth-btn" type="button">Export to Oscillator</button>
-      <button id="custom_preview" class="synth-btn" type="button">Preview</button>
-      <button id="custom_stop" class="synth-btn" type="button">Stop Preview</button>
-    </div>
-    <div id="custom_formula_wrap" style="display:none; width:100%">
-      <label style="width:100%">f(t) = <input id="custom_formula" type="text" style="width:80%" placeholder="e.g., Math.sin(2*Math.PI*t)+0.5*Math.sin(4*Math.PI*t)"/></label>
-    </div>
-    <div id="custom_draw_wrap" style="display:block; width:100%">
-      <canvas id="custom_draw" width="600" height="160" style="touch-action:none; background:#111; border:1px solid #333; width:min(680px,96vw)"></canvas>
-      <div><button id="custom_clear" class="synth-btn" type="button">Clear Drawing</button></div>
-    </div>
-    <div id="custom_add_wrap" style="display:none; width:100%">
-      <div id="custom_partials" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px"></div>
-    </div>
-    <div style="margin-top:10px">
-      <canvas id="custom_scope" width="600" height="120" style="background:#080808; border:1px solid #333; width:min(680px,96vw)"></canvas>
-    </div>
-  </div>
-</div>
 <main class="app">
   <div class="controls">
     <div style="display:flex;align-items:center;gap:8px">
@@ -465,8 +408,6 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <span id="midiState" class="badge" aria-live="polite"></span>
   </div>
   <div id="keypadWrap" class="keypad-wrap">
-    <div id="seqStepsPerimeter" style="display:none"></div>
-
     <div id="keypad" class="keypad" aria-label="Keypad"></div>
   </div>
 </main>
@@ -699,9 +640,9 @@ async function initBitcrusherWorklet(ctx){
     `;
     const blob = new Blob([code], {type:'application/javascript'});
     const url  = URL.createObjectURL(blob);
-    try { await ctx.audioWorklet.addModule(url); ctx._bcRegistered = true; } catch(e) { ctx._bcRegistered = false; }
+    await ctx.audioWorklet.addModule(url);
     URL.revokeObjectURL(url);
-    ctx._bcLoading = false;
+    ctx._bcRegistered = true;
     ctx._bcLoading = false;
   }
 }
@@ -783,42 +724,8 @@ function makeSynth(a){
   distSum.connect(bcIn);
   bcIn.connect(bcDry).connect(bcSum);
   (async ()=>{
-    try { await initBitcrusherWorklet(a); } catch(e) {}
-    let node = null;
-    if (a.audioWorklet && a._bcRegistered === true){
-      try {
-        node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
-      } catch(e) { node = null; }
-    }
-    if (!node){
-      // Fallback ScriptProcessor-based bitcrusher
-      const proc = a.createScriptProcessor(512, 2, 2);
-      let _bits = 24, _downRate = a.sampleRate || 48000;
-      let lastL = 0, lastR = 0, phase = 0;
-      proc.onaudioprocess = function(e){
-        const inL = e.inputBuffer.getChannelData(0);
-        const inR = (e.inputBuffer.numberOfChannels>1? e.inputBuffer.getChannelData(1): inL);
-        const outL = e.outputBuffer.getChannelData(0);
-        const outR = e.outputBuffer.getChannelData(1);
-        const step = Math.max(1, Math.floor((a.sampleRate||48000)/Math.max(50,_downRate)));
-        const levels = Math.max(2, 1<<Math.max(1, Math.min(23, (_bits|0))));
-        const q = 2/levels;
-        for(let i=0;i<outL.length;i++){
-          if(phase===0){
-            lastL = Math.max(-1, Math.min(1, Math.round(inL[i]/q)*q));
-            lastR = Math.max(-1, Math.min(1, Math.round(inR[i]/q)*q));
-          }
-          outL[i]=lastL; outR[i]=lastR;
-          phase = (phase+1)%step;
-        }
-      };
-      // parameter shim
-      const map = new Map();
-      map.set('bits', { setValueAtTime:(v)=>{ _bits = v; } });
-      map.set('downRate', { setValueAtTime:(v)=>{ _downRate = v; } });
-      proc.parameters = { get:(k)=> map.get(k) };
-      node = proc;
-    }
+    await initBitcrusherWorklet(a);
+    const node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
     bitcrusherNode = node;
     bitcrusherMix  = { dry: bcDry, wet: bcWet };
     bcIn.connect(node).connect(bcWet);
@@ -1507,9 +1414,7 @@ function bindHeader(){
   document.getElementById('midiBtn').onclick=()=>ensureAudio().then(connectMIDI);
   const st=document.getElementById('synthToggle'), sp=document.getElementById('synthPanel'); st.onclick=()=>{ const o=sp.classList.toggle('open'); st.setAttribute('aria-expanded',o?'true':'false'); };
   const gt=document.getElementById('granularToggle'), gp=document.getElementById('granularPanel'); gt.onclick=()=>{ const o=gp.classList.toggle('open'); gt.setAttribute('aria-expanded',o?'true':'false'); };
-  const sat=document.getElementById('samplerToggle'), sap=document.getElementById('samplerPanel'); sat.onclick=()=>{ const o=sap.classList.toggle('open'); sat.setAttribute('aria-expanded',o?'true':'false'); if(o){ ensureAudio().then(initSamplerBus);
-  const ct=document.getElementById('customToggle'), cp=document.getElementById('customPanel'); ct.onclick=()=>{ const o=cp.classList.toggle('open'); ct.setAttribute('aria-expanded',o?'true':'false'); };
-} };
+  const sat=document.getElementById('samplerToggle'), sap=document.getElementById('samplerPanel'); sat.onclick=()=>{ const o=sap.classList.toggle('open'); sat.setAttribute('aria-expanded',o?'true':'false'); if(o){ ensureAudio().then(initSamplerBus);} };
   const rec=document.getElementById('recBtn'); rec.onclick=()=>{ ensureAudio().then(()=>{ if(!mediaRecorder||mediaRecorder.state!=='recording') startTopRecording(); else stopTopRecording(); }); };
 
   const ml=document.getElementById('midiLearnBtn');
@@ -2036,92 +1941,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   const pattern = new Map();   // step -> Set(MIDI)
   let held=[];
   let maxCols=32; let strip=null;
-  let peri=null, isMobile=()=> window.matchMedia('(max-width: 740px)').matches;
-
-  function ensurePerimeter(){
-    if(!isMobile()) return;
-    if(!peri){ peri = $('seqStepsPerimeter'); }
-    if(!peri) return;
-    const L = len();
-    // Rebuild if count mismatch
-    if(peri.childElementCount !== L){
-      peri.innerHTML='';
-      // Compute perimeter path around keypad
-      const wrap = $('keypadWrap'); if(!wrap) return;
-      const pad = $('keypad'); if(!pad) return;
-      const r = wrap.getBoundingClientRect();
-      const w = r.width, h = r.height;
-      const inset = 6, size = 34;
-      const topY = inset, bottomY = h - inset - size;
-      const leftX = inset, rightX = w - inset - size;
-      const topCount = Math.max(4, Math.floor((w-2*inset)/ (size+4)));
-      const bottomCount = topCount;
-      const sideCount = Math.max(4, Math.floor((h-2*inset)/ (size+4)));
-      const perimSlots = topCount + bottomCount + 2*sideCount;
-      for(let i=0;i<L;i++){
-        const d = document.createElement('div'); d.className='peri-led'; d.dataset.index=String(i);
-        // map i to perimeter slot evenly
-        const t = i / L * perimSlots;
-        const slot = Math.floor(t);
-        let x=0,y=0;
-        if(slot < topCount){
-          // top left->right
-          x = leftX + slot*( (w-2*inset - size) / Math.max(1, topCount-1) );
-          y = topY;
-        } else if(slot < topCount + sideCount){
-          // right top->bottom
-          const k = slot - topCount;
-          x = rightX; y = topY + k*( (h-2*inset - size) / Math.max(1, sideCount-1) );
-        } else if(slot < topCount + sideCount + bottomCount){
-          // bottom right->left
-          const k = slot - topCount - sideCount;
-          x = rightX - k*( (w-2*inset - size) / Math.max(1, bottomCount-1) );
-          y = bottomY;
-        } else {
-          // left bottom->top
-          const k = slot - topCount - sideCount - bottomCount;
-          x = leftX; y = bottomY - k*( (h-2*inset - size) / Math.max(1, sideCount-1) );
-        }
-        d.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-        peri.appendChild(d);
-      }
-      // Click / double-tap handling mirrors strip logic
-      peri.addEventListener('click', (e)=>{
-        const d = e.target.closest('.peri-led'); if(!d) return;
-        const i = +(d.dataset.index||0);
-        if(!(i < len())) return;
-        if (performance.now() < (peri._suppressClickUntil||0)){
-          e.preventDefault(); e.stopPropagation(); return;
-        }
-        setPlay(false); step = i; renderHighlights(step,false);
-      }, true);
-      // double click clears
-      peri.addEventListener('dblclick', (e)=>{
-        const d = e.target.closest('.peri-led'); if(!d) return;
-        const i = +(d.dataset.index||0);
-        if(!(i < len())) return;
-        e.preventDefault(); e.stopPropagation();
-        pattern.delete(i);
-        setPlay(false); step = i; renderHighlights(step,false);
-        peri._suppressClickUntil = performance.now() + 350;
-      }, true);
-      // mobile double-tap
-      let lastTapIdx=-1, lastTapT=0;
-      peri.addEventListener('pointerdown', (e)=>{
-        const d = e.target.closest('.peri-led'); if(!d) return;
-        const i = +(d.dataset.index||0);
-        const now=performance.now();
-        if(i===lastTapIdx && (now-lastTapT)<300){
-          e.preventDefault(); e.stopPropagation();
-          pattern.delete(i);
-          setPlay(false); step = i; renderHighlights(step,false);
-          lastTapIdx=-1; lastTapT=0; peri._suppressClickUntil = now+350; return;
-        }
-        lastTapIdx=i; lastTapT=now;
-      }, true);
-    }
-  }
-
 
   const $ = (id)=>document.getElementById(id);
   const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
@@ -2157,73 +1976,32 @@ document.addEventListener('DOMContentLoaded',()=>{
   function vel(){ return Math.max(.1, +($('seq_vel')?.value||.9)); }
   function tr(){ return +($('seq_trans')?.value||0); }
 
-  
-function renderHighlights(currentIdx, playing){
-  ensureStrip();
-  const sEl = $('seqStepsStrip');
-  ensurePerimeter();
-
-  // Update top strip LEDs (desktop)
-  if(sEl){
-    const L = len();
-    const nodes = $$('.led', sEl);
-    nodes.forEach((n,i)=>{
-      n.classList.remove('active','play','has');
-      if(i < L){
-        const set = pattern.get(i);
-        if(set && set.size) n.classList.add('has');
-        if(i === currentIdx){ n.classList.add(playing ? 'play' : 'active'); }
-        n.style.visibility = 'visible';
-      } else {
-        n.style.visibility = 'hidden';
-      }
-    });
+  function renderHighlights(currentIdx, playing){
+    ensureStrip(); const sEl=$('seqStepsStrip');
+    if(sEl){
+      const L=len(); const nodes=$$('.led', sEl);
+      nodes.forEach((n,i)=>{
+        n.classList.remove('active','play','has');
+        if(i<L){
+          const set=pattern.get(i);
+          if(set && set.size) n.classList.add('has');
+          if(i===currentIdx){ n.classList.add(playing?'play':'active'); }
+          n.style.visibility='visible';
+        } else {
+          n.style.visibility='hidden';
+        }
+      });
+    }
+    // Keypad partial lights for current step when not playing
+    const pad=$('keypad');
+    if(pad && !playing){
+      const set=pattern.get(currentIdx)||new Set();
+      $$('.key', pad).forEach(k=>{
+        const m=parseFloat(k.dataset.midi);
+        if(set.has(m)) k.classList.add('seq-has'); else k.classList.remove('seq-has');
+      });
+    }
   }
-
-  // Update perimeter LEDs (mobile)
-  if(isMobile() && peri){
-    const L = len();
-    const nodes2 = $$('.peri-led', peri);
-    nodes2.forEach((n,i)=>{
-      n.classList.remove('active','play','has');
-      if(i < L){
-        const set = pattern.get(i);
-        if(set && set.size) n.classList.add('has');
-        if(i === currentIdx){ n.classList.add(playing ? 'play' : 'active'); }
-        n.style.visibility = 'visible';
-      } else {
-        n.style.visibility = 'hidden';
-      }
-    });
-  }
-
-  // Keypad per-step indicators when not playing
-  const pad = $('keypad');
-  if(pad && !playing){
-    const set = pattern.get(currentIdx) || new Set();
-    $$('.key', pad).forEach(k=>{
-      const m = parseFloat(k.dataset.midi);
-      if(set.has(m)) k.classList.add('seq-has'); else k.classList.remove('seq-has');
-    });
-  }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   function allOff(){ try{ held.forEach(m=> routeNoteOff(m)); }catch{} held.length=0; }
   function setOn(v){ ON=!!v; $('seqToggle')?.setAttribute('aria-pressed', String(ON)); ui(ON); if(!ON) setPlay(false); renderHighlights(step, PLAY); }
@@ -2257,7 +2035,6 @@ function renderHighlights(currentIdx, playing){
         const m=parseFloat(k.dataset.midi);
         if(held.includes(m)) k.classList.add('seq-play');
       });
-      if(isMobile() && peri){ const nodes2=$$('.peri-led', peri); nodes2.forEach((n,i)=>{ n.classList.remove('active','play','has'); if(i<L){ const set=pattern.get(i); if(set&&set.size) n.classList.add('has'); if(i===currentIdx){ n.classList.add(playing?'play':'active'); } n.style.visibility='visible'; } else { n.style.visibility='hidden'; } }); }
       setTimeout(()=>{ keys.forEach(k=> k.classList.remove('seq-play')); }, Math.max(60, gateSec()*1000));
     }
     renderHighlights(s, true);
@@ -2282,7 +2059,7 @@ function renderHighlights(currentIdx, playing){
         const L = len();
         const s = step % L;
         let set = pattern.get(s); if(!set){ set=new Set(); pattern.set(s,set); }
-        set.clear(); set.add(midi);
+        if(set.has(midi)) set.delete(midi); else set.add(midi);
         target.classList.add('on'); setTimeout(()=>target.classList.remove('on'), 80);
         step = (s+1) % L;
         renderHighlights(step, false);
@@ -2291,20 +2068,70 @@ function renderHighlights(currentIdx, playing){
   }
 
   // Click LED to jump step (when not playing)
-  function attachStripClick(){
-    ensureStrip();
-    const sEl=$('seqStepsStrip'); if(!sEl || sEl.__seqHooked) return;
-    sEl.__seqHooked=true;
-    sEl.addEventListener('click', (e)=>{
-      const d=e.target.closest('.led'); if(!d || PLAY) return;
-      const i=+d.dataset.index; if(i < len()){ step=i; renderHighlights(step,false); }
-    });
-  }
+  
+function attachStripClick(){
+  ensureStrip();
+  const sEl = $('seqStepsStrip');
+  if(!sEl || sEl.__seqHooked) return;
+  sEl.__seqHooked = true;
 
-  window.addEventListener('resize', ()=>{ peri=null; ensurePerimeter(); renderHighlights(step, PLAY); });
+  // State for mobile double-tap + click suppression
+  let lastTapIdx = -1, lastTapT = 0;
+  let suppressClickUntil = 0;
+
+  // Desktop: double-click clears step
+  sEl.addEventListener('dblclick', (e)=>{
+    const d = e.target.closest('.led'); if(!d) return;
+    const i = +(d.dataset.index);
+    if(!(i < len())) return;
+    e.preventDefault(); e.stopPropagation();
+    pattern.delete(i);
+    // keep selection on this step for continued editing
+    setPlay(false);
+    step = i;
+    renderHighlights(step, false);
+    suppressClickUntil = performance.now() + 350; // prevent following single-click
+  }, true);
+
+  // Mobile: double-tap (two pointerdowns within 300ms on same LED) clears step
+  sEl.addEventListener('pointerdown', (e)=>{
+    const d = e.target.closest('.led'); if(!d) return;
+    const i = +(d.dataset.index);
+    if(!(i < len())) return;
+    const now = performance.now();
+    if (i === lastTapIdx && (now - lastTapT) < 300){
+      e.preventDefault(); e.stopPropagation();
+      pattern.delete(i);
+      setPlay(false);
+      step = i;
+      renderHighlights(step, false);
+      lastTapIdx = -1; lastTapT = 0;
+      suppressClickUntil = now + 350;
+      return;
+    }
+    lastTapIdx = i; lastTapT = now;
+  }, true);
+
+  // Single click: select step for editing (unless suppressed by a double action)
+  sEl.addEventListener('click', (e)=>{
+    const d = e.target.closest('.led'); if(!d) return;
+    const i = +(d.dataset.index);
+    if(!(i < len())) return;
+    if (performance.now() < suppressClickUntil){
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    // select step for input, stop playback
+    setPlay(false);
+    step = i;
+    renderHighlights(step, false);
+  }, true);
+}
+
+
 
   // Reset-safe hooks
-  window.addEventListener('rebuild:keypad', ()=>{ attachDelegation(); peri=null; ensurePerimeter(); renderHighlights(step, PLAY); });
+  window.addEventListener('rebuild:keypad', ()=>{ attachDelegation(); renderHighlights(step, PLAY); });
   window.addEventListener('audio:ready', ()=>{ attachDelegation(); attachStripClick(); renderHighlights(step, PLAY); if(PLAY) start(); });
 
   $('seqToggle')?.addEventListener('click', ()=> setOn(!ON));
@@ -2322,7 +2149,7 @@ function renderHighlights(currentIdx, playing){
         const s = step % L;
         let set = pattern.get(s); if(!set){ set=new Set(); pattern.set(s,set); }
         // toggle the incoming MIDI note for this step
-        set.clear(); set.add(midi);
+        if(set.has(midi)) set.delete(midi); else set.add(midi);
         // advance one step for quick entry and update highlights
         step = (s+1) % L;
         renderHighlights(step, false);
@@ -2358,274 +2185,9 @@ function renderHighlights(currentIdx, playing){
 })();
 </script>
 
-
-<script>
-(function(){
-  window.customWaves = window.customWaves || {};
-  window.makePeriodicFromUI = window.makePeriodicFromUI || null;
-
-  function getAC(){ return window.audioCtx || window._stagsynth_synthCtx || window.a || null; }
-  const $ = (id)=>document.getElementById(id);
-
-  function initCustomPanelOnce(){
-    const modeSel=$('custom_mode'); const harm=$('custom_harmonics'); const nameEl=$('custom_name');
-    const canvas=$('custom_draw'); const scope=$('custom_scope');
-    const formulaWrap=$('custom_formula_wrap'); const drawWrap=$('custom_draw_wrap'); const addWrap=$('custom_add_wrap'); const partialsWrap=$('custom_partials');
-    if(!modeSel || !harm || !canvas || !scope || !partialsWrap) return false;
-
-    function buildPartials(n){
-      partialsWrap.innerHTML='';
-      n=Math.max(1,Math.min(64, n|0));
-      for(let i=1;i<=n;i++){
-        const row=document.createElement('div'); row.className='partial';
-        const lbl=document.createElement('label'); lbl.textContent = i + 'x';
-        const s=document.createElement('input'); s.type='range'; s.min=0; s.max=1; s.step=0.01; s.value = (i===1?1:0);
-        s.id='partial_'+i;
-        const v=document.createElement('span'); v.textContent=s.value;
-        s.addEventListener('input', ()=>{ v.textContent=s.value; });
-        row.appendChild(lbl); row.appendChild(s); row.appendChild(v);
-        partialsWrap.appendChild(row);
-      }
-    }
-    buildPartials(parseInt(harm.value||'16',10));
-    harm.addEventListener('input', ()=> buildPartials(parseInt(harm.value||'16',10)) );
-
-    const ctx2d = canvas.getContext('2d'); const points=[];
-    let drawing=false;
-    function redraw(){
-      ctx2d.clearRect(0,0,canvas.width,canvas.height);
-      ctx2d.fillStyle='#111'; ctx2d.fillRect(0,0,canvas.width,canvas.height);
-      if(points.length>0){
-        ctx2d.strokeStyle='#2ad'; ctx2d.lineWidth=2; ctx2d.beginPath();
-        for(let i=0;i<points.length;i++){
-          const p=points[i]; const x=p.x*canvas.width; const y=(1-p.y)*canvas.height;
-          if(i===0) ctx2d.moveTo(x,y); else ctx2d.lineTo(x,y);
-        }
-        ctx2d.stroke();
-      }
-    }
-    function addPoint(clientX, clientY){
-      const r = canvas.getBoundingClientRect();
-      const x = Math.min(1, Math.max(0, (clientX - r.left)/r.width));
-      const y = Math.min(1, Math.max(0, (clientY - r.top)/r.height));
-      points.push({x,y}); redraw();
-    }
-    canvas.addEventListener('pointerdown', (e)=>{ drawing=true; canvas.setPointerCapture?.(e.pointerId); addPoint(e.clientX, e.clientY); });
-    canvas.addEventListener('pointermove', (e)=>{ if(!drawing) return; addPoint(e.clientX, e.clientY); });
-    canvas.addEventListener('pointerup', ()=>{ drawing=false; try{canvas.releasePointerCapture?.();}catch{} });
-    $('custom_clear')?.addEventListener('click', ()=>{ points.length=0; redraw(); });
-
-    function updateMode(){
-      const m = modeSel.value;
-      formulaWrap.style.display = (m==='formula')?'block':'none';
-      drawWrap.style.display    = (m==='draw')?'block':'none';
-      addWrap.style.display     = (m==='additive')?'block':'none';
-    }
-    modeSel.addEventListener('input', updateMode); updateMode();
-
-    function makePeriodicFromUI(ac){
-      const m = modeSel.value;
-      if(m==='additive'){
-        const n = parseInt(harm.value||'16',10);
-        const real = new Float32Array(n+1), imag = new Float32Array(n+1);
-        for(let i=1;i<=n;i++){
-          const amp = parseFloat((document.getElementById('partial_'+i)?.value)||'0');
-          real[i]=0; imag[i]=amp;
-        }
-        return ac.createPeriodicWave(real, imag, {disableNormalization:false});
-      }else{
-        const N=512; const samples = new Float32Array(N);
-        if(m==='formula'){
-          const expr = ($('custom_formula')?.value)||'Math.sin(2*Math.PI*t)';
-          for(let i=0;i<N;i++){
-            const t = i/N;
-            try{ samples[i] = (function(t){ return eval(expr); })(t); }catch(e){ samples[i]=0; }
-          }
-        }else{
-          if(points.length<2){ for(let i=0;i<N;i++) samples[i]=0; }
-          else{
-            for(let i=0;i<N;i++){
-              const x=i/(N-1);
-              let j=0; while(j<points.length && points[j].x < x) j++;
-              if(j===0){ samples[i]=1- points[0].y; }
-              else if(j>=points.length){ samples[i]=1- points[points.length-1].y; }
-              else{
-                const p0=points[j-1], p1=points[j];
-                const t=(x-p0.x)/((p1.x-p0.x)||1e-6);
-                samples[i]=(1-p0.y)*(1-t) + (1-p1.y)*t;
-              }
-            }
-          }
-        }
-        const K = parseInt(harm.value||'16',10);
-        const Re = new Float32Array(K+1), Im = new Float32Array(K+1);
-        for(let k=1;k<=K;k++){
-          let a=0,b=0;
-          for(let n=0;n<N;n++){
-            const th = 2*Math.PI*k*n/N;
-            a += samples[n]*Math.cos(th);
-            b += samples[n]*Math.sin(th);
-          }
-          Re[k] = (2/N)*a; Im[k] = (2/N)*b;
-        }
-        return ac.createPeriodicWave(Re, Im, {disableNormalization:false});
-      }
-    }
-    window.makePeriodicFromUI = makePeriodicFromUI;
-
-    // Preview & export
-    let previewOsc=null, previewGain=null, analyser=null, scopeRAF=0;
-    function stopPreview(){
-      try{ cancelAnimationFrame(scopeRAF); }catch{};
-      if(previewOsc){ try{ previewOsc.stop() }catch{}; try{ previewOsc.disconnect() }catch{}; previewOsc=null; }
-      if(previewGain){ try{ previewGain.disconnect() }catch{}; previewGain=null; }
-      if(analyser){ try{ analyser.disconnect() }catch{}; analyser=null; }
-      const sc = $('custom_scope'); if(sc){ const sctx=sc.getContext('2d'); sctx.clearRect(0,0,sc.width,sc.height); }
-    }
-    function startPreview(){
-      const ac=getAC(); if(!ac || !window.makePeriodicFromUI) return;
-      stopPreview();
-      const wave = window.makePeriodicFromUI(ac);
-      previewOsc = ac.createOscillator();
-      previewOsc.setPeriodicWave(wave);
-      previewGain = ac.createGain(); previewGain.gain.value=0.3;
-      analyser = ac.createAnalyser(); analyser.fftSize = 1024;
-      previewOsc.connect(previewGain).connect(analyser).connect(ac.destination);
-      previewOsc.start();
-      drawScope();
-    }
-    function drawScope(){
-      if(!analyser) return;
-      const sc=$('custom_scope'); if(!sc) return;
-      const sctx = sc.getContext('2d');
-      const buf = new Uint8Array(analyser.fftSize);
-      const W=sc.width,H=sc.height;
-      (function loop(){
-        if(!analyser) return;
-        analyser.getByteTimeDomainData(buf);
-        sctx.fillStyle='#080808'; sctx.fillRect(0,0,W,H);
-        sctx.strokeStyle='#0f0'; sctx.beginPath();
-        for(let i=0;i<buf.length;i++){
-          const x = i/(buf.length-1) * W;
-          const y = (buf[i]/255) * H;
-          if(i===0) sctx.moveTo(x,y); else sctx.lineTo(x,y);
-        }
-        sctx.stroke();
-        scopeRAF = requestAnimationFrame(loop);
-      })();
-    }
-    $('custom_preview')?.addEventListener('click', startPreview);
-    $('custom_stop')?.addEventListener('click', stopPreview);
-
-    function exportWave(){
-      const ac=getAC(); if(!ac || !window.makePeriodicFromUI) return;
-      const wave = window.makePeriodicFromUI(ac);
-      const nmEl=$('custom_name'); const nmRaw=(nmEl?.value)||'MyWave';
-      const nm = nmRaw.replace(/[^a-z0-9_ -]/gi,'').trim() || 'MyWave';
-      const key = 'custom:'+nm;
-      window.customWaves[key] = wave;
-      ['shape','subShape'].forEach(id=>{
-        const sel=document.getElementById(id); if(!sel) return;
-        const exists = Array.from(sel.options).some(o=> o.value===key || o.textContent===nm);
-        if(!exists){ const opt=document.createElement('option'); opt.value=key; opt.textContent=nm; sel.appendChild(opt); }
-      });
-      const selMain = document.getElementById('shape');
-      if(selMain){ selMain.value=key; selMain.dispatchEvent(new Event('input',{bubbles:true})); }
-    }
-    $('custom_export')?.addEventListener('click', exportWave);
-
-    // Patch makeSynth once
-    if(!window.__customWave_patched && typeof window.makeSynth === 'function'){
-      window.__customWave_patched = true;
-      const oldMake = window.makeSynth;
-      window.makeSynth = function(a){
-        const api = oldMake(a);
-        const oldNoteOn = api.noteOn;
-        api.noteOn = function(midi, vel){
-          const res = oldNoteOn.call(this, midi, vel);
-          try{
-            const vobj = this._voices?.get?.(midi);
-            if(!vobj) return res;
-            const keyMain = (this.params?.shape)||'sawtooth';
-            const keySub  = (this.params?.subShape)||'off';
-            const waveMain = window.customWaves[keyMain];
-            const waveSub  = window.customWaves[keySub];
-            if(waveMain && vobj.mainOsc && vobj.mainOsc.setPeriodicWave){ vobj.mainOsc.setPeriodicWave(waveMain); vobj.mainOsc.type='custom'; }
-            if(waveSub  && vobj.subOsc  && vobj.subOsc.setPeriodicWave){ vobj.subOsc.setPeriodicWave(waveSub); vobj.subOsc.type='custom'; }
-          }catch(e){}
-          return res;
-        };
-        return api;
-      };
-    }
-
-    return true;
-  }
-
-  function initCustomToggle(){
-    const btn = $('customToggle'); const panel=$('customPanel');
-    if(!btn || !panel) return;
-    if(btn.__bound) return; btn.__bound = true;
-    btn.addEventListener('click', async ()=>{
-      if(typeof window.ensureAudio==='function'){ try{ await window.ensureAudio(); }catch{} }
-      const show = panel.style.display !== 'block';
-      document.querySelectorAll('.synth-panel').forEach(p=> p.style.display = 'none');
-      panel.style.display = show ? 'block' : 'none';
-      btn.setAttribute('aria-expanded', String(show));
-      initCustomPanelOnce();
-    });
-  }
-
-  function initAll(){ initCustomToggle(); initCustomPanelOnce(); }
-  if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', initAll); } else { initAll(); }
-  window.addEventListener('audio:ready', initAll);
-})();
-</script>
-
-
-<script>
-(function(){
-  const $ = (id)=>document.getElementById(id);
-  function showOnly(panelId){
-    document.querySelectorAll('.synth-panel').forEach(p=> p.style.display = (p.id===panelId?'block':'none'));
-  }
-  function initCustomBasics(){
-    const btn = $('customToggle'), panel = $('customPanel');
-    if(!btn || !panel) return;
-    if(btn.__bound) return; btn.__bound = true;
-    btn.addEventListener('click', ()=>{
-      const on = panel.style.display === 'block';
-      if(on){ panel.style.display='none'; btn.setAttribute('aria-expanded','false'); }
-      else { showOnly('customPanel'); btn.setAttribute('aria-expanded','true'); }
-    });
-
-    // Minimal canvas draw so the panel is obviously working even if advanced script is delayed
-    const canvas = $('custom_draw'); const clearBtn = $('custom_clear');
-    if(canvas && !canvas.__miniBound){
-      canvas.__miniBound = true;
-      const ctx = canvas.getContext('2d');
-      let drawing=false;
-      function drawPt(e){
-        const r = canvas.getBoundingClientRect();
-        const x = e.clientX - r.left, y = e.clientY - r.top;
-        if(!drawing) return;
-        ctx.fillStyle = '#2ad'; ctx.fillRect(x, y, 2, 2);
-      }
-      canvas.addEventListener('pointerdown', (e)=>{ drawing=true; canvas.setPointerCapture?.(e.pointerId); drawPt(e); });
-      canvas.addEventListener('pointermove', drawPt);
-      canvas.addEventListener('pointerup', ()=>{ drawing=false; try{canvas.releasePointerCapture?.();}catch{} });
-      clearBtn && clearBtn.addEventListener('click', ()=>{ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle='#111'; ctx.fillRect(0,0,canvas.width,canvas.height); });
-      // init bg
-      ctx.fillStyle='#111'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    }
-  }
-  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', initCustomBasics); } else { initCustomBasics(); }
-  window.addEventListener('audio:ready', initCustomBasics);
-})();
-</script>
-
 </body>
 
 
 
 </html>
+
