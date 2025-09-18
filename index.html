@@ -109,9 +109,43 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .synth-btn.ll-on{outline:2px solid var(--accent); box-shadow:0 0 10px var(--accent);} 
 #llToggleOverlay{position:relative; z-index:12; pointer-events:auto}
 </style>
+
+<style>
+/* seq media */
+@media (max-width: 480px){
+  #seqStepsStrip{position:relative; margin:10px auto 8px auto; width:min(860px,98vw); display:grid; grid-template-columns: repeat(32, 1fr); gap:5px; z-index:1;}
+  #seqStepsStrip .led{height:12px; border-radius:4px; background:#1e1e1e; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);}
+}
+</style>
+
+
+<style>
+/* seq final media */
+@media (max-width: 900px){
+  #seqStepsStrip{ width: 96vw; gap:4px; }
+}
+@media (max-width: 540px){
+  #seqStepsStrip{ width: 96vw; gap:3px; margin:8px auto 10px auto; }
+  #seqStepsStrip .led{ height:14px; border-radius:5px; }
+}
+</style>
+
 </head>
 <body>
-<header class="topbar" id="topbar">
+<style>
+  </style>
+
+<style>
+  #seqStepsStrip{position:relative; margin:10px auto 8px auto; width:min(860px,98vw); display:grid; grid-template-columns: repeat(32, 1fr); gap:5px; z-index:1;}
+  #seqStepsStrip .led{height:12px; border-radius:4px; background:#1e1e1e; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);}
+  #seqStepsStrip .led.has{background:linear-gradient(#444,#555)}
+  #seqStepsStrip .led.active{background:#ffd34d; box-shadow:0 0 10px #ffd34d, inset 0 0 0 1px rgba(0,0,0,.5)}
+  #seqStepsStrip .led.play{background:#ff7a00; box-shadow:0 0 10px #ff7a00, inset 0 0 0 1px rgba(0,0,0,.6)}
+  /* keypad note highlights */
+  .key.seq-has{box-shadow:inset 0 0 0 2px rgba(255,211,77,.8)}
+  .key.seq-play{background:rgba(255,122,0,.25)}
+</style>
+<div id="seqStepsStrip" style="display:none"></div><header class="topbar" id="topbar">
   <h1>StagSynth</h1>
   <div class="tb-row">
     <button id="startBtn" class="synth-btn" title="Start or Resume Audio">Start Audio</button>
@@ -153,7 +187,21 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 
   <!-- ===== FULL FX SUITE (all neutral on load) ===== -->
   <div class="section" id="fxSuite">
-    <h4>FX Suite</h4>
+    
+<div class="section" id="seqControlsInline" style="display:none">
+  <h4>Sequencer</h4>
+  <label style="grid-column:1/span 1">BPM <input type="range" id="seq_bpm" min="40" max="220" step="1" value="120"></label>
+  <label style="grid-column:2/span 1">Steps <input type="range" id="seq_steps" min="1" max="32" step="1" value="16"></label>
+  <label style="grid-column:1/span 1">Gate (%) <input type="range" id="seq_gate" min="5" max="100" step="1" value="60"></label>
+  <label style="grid-column:2/span 1">Swing (%) <input type="range" id="seq_swing" min="0" max="60" step="1" value="0"></label>
+  <label style="grid-column:1/span 1">Division
+    <select id="seq_div"><option value="4">1/4</option><option value="8">1/8</option><option value="16" selected>1/16</option><option value="32">1/32</option></select>
+  </label>
+  <label style="grid-column:2/span 1">Transpose <input type="range" id="seq_trans" min="-24" max="24" step="1" value="0"></label>
+  <label style="grid-column:1/span 2">Velocity <input type="range" id="seq_vel" min="0.1" max="1" step="0.01" value="0.9"></label>
+  <div style="grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap"><button id="seq_clear" class="synth-btn" type="button">Clear</button></div>
+</div>
+<h4>FX Suite</h4>
 
     <!-- Reverb (neutral = MIX 0) -->
     <label>Reverb Room Size <input type="range" id="fx_rev_room" data-midicc min="0.1" max="1.0" step="0.01" value="0.6"/></label>
@@ -355,9 +403,8 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <button id="microBtn" class="synth-btn owl" title="Quartertone mode">
       <svg viewBox="0 0 100 100" width="22" height="22"><circle cx="50" cy="50" r="40" fill="none" stroke="#25ff85" stroke-width="8"/><text x="50" y="58" text-anchor="middle" font-size="42" fill="#25ff85">🦉</text></svg>
     </button>
-<button id="llToggleOverlay" type="button" class="synth-btn" role="switch" aria-checked="false" aria-pressed="false" title="Low Latency Mode">LL</button>
-    <button id="stageModeBtn" type="button" class="synth-btn" role="switch" aria-checked="false" aria-pressed="false" title="LL + Gig Boost preset">Stage&nbsp;Mode</button>
-    <button id="gigBoostBtn" type="button" class="synth-btn" role="switch" aria-checked="false" aria-pressed="false" title="Live: cut & loud">Gig&nbsp;Boost</button>
+<button id="seqToggle" type="button" class="synth-btn" aria-pressed="false" title="Sequencer On/Off">Sequencer</button>
+<button id="seqModeBtn" type="button" class="synth-btn" aria-pressed="false" title="Switch Input/Play" style="display:none">Input</button>
     <span id="midiState" class="badge" aria-live="polite"></span>
   </div>
   <div id="keypadWrap" class="keypad-wrap">
@@ -395,66 +442,21 @@ const TAKES_KEY='stagsynth_takes_v5';
 function loadTakes(){ try{ return JSON.parse(localStorage.getItem(TAKES_KEY)||'{}'); }catch{return{}} }
 function saveTakes(o){ try{ localStorage.setItem(TAKES_KEY, JSON.stringify(o)); }catch{} }
 /* ===== Setup / teardown ===== */
-
 function setupRecordingBus(){
   const a=audioCtx;
   mixNode=a.createGain(); mixNode.gain.value=.95;
 
-  // Master conditioning: DC blocker + subsonic HPF
-  dcBlock=a.createBiquadFilter(); dcBlock.type='highpass'; dcBlock.frequency.value=18; dcBlock.Q.value=0.707;
-  subTamer=a.createBiquadFilter(); subTamer.type='highpass'; subTamer.frequency.value=30; subTamer.Q.value=0.707;
-
-  // Gig Boost tone/psychoacoustics (always inline; gains controlled by UI toggle)
-  mastIn=a.createGain();
-  lowShelf=a.createBiquadFilter(); lowShelf.type='lowshelf'; lowShelf.frequency.value=140; lowShelf.gain.value=-1.5;
-  presenceEQ=a.createBiquadFilter(); presenceEQ.type='peaking'; presenceEQ.frequency.value=3200; presenceEQ.Q.value=0.8; presenceEQ.gain.value=1.8;
-  hiShelf=a.createBiquadFilter(); hiShelf.type='highshelf'; hiShelf.frequency.value=9000; hiShelf.gain.value=1.2;
-
-  // Parallel exciter (band-limited soft saturation)
-  excBand=a.createBiquadFilter(); excBand.type='bandpass'; excBand.frequency.value=2800; excBand.Q.value=0.9;
-  excPre=a.createGain(); excPre.gain.value=2.5;
-  excWS=a.createWaveShaper();
-  (function(){
-    const n=44100, c=new Float32Array(n);
-    for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=Math.tanh(2.2*x); }
-    excWS.curve=c;
-  })();
-  excPost=a.createGain(); excPost.gain.value=0.12;
-
-  mastSum=a.createGain();
-
-  // Optional high-band width
-  splitHP=a.createBiquadFilter(); splitHP.type='highpass'; splitHP.frequency.value=1200;
-  splitter=a.createChannelSplitter(2);
-  merger=a.createChannelMerger(2);
-  widL=a.createGain(); widR=a.createGain(); widL.gain.value=1.0; widR.gain.value=1.0;
-  widMix=a.createGain(); widMix.gain.value=0.15;
-
   // Safety limiter at the very end
   limiter=a.createDynamicsCompressor();
-  limiter.threshold.value=-7; limiter.knee.value=24; limiter.ratio.value=20;
-  limiter.attack.value=0.002; limiter.release.value=0.20;
+  limiter.threshold.value=-10; limiter.knee.value=20; limiter.ratio.value=8;
+  limiter.attack.value=0.003; limiter.release.value=0.25;
 
-  // Wiring: mixNode -> DC/sub -> mastIn -> tone EQ (+parallel) -> mastSum -> limiter -> destination
-  mixNode.connect(dcBlock).connect(subTamer).connect(mastIn);
-  mastIn.connect(lowShelf).connect(presenceEQ).connect(hiShelf).connect(mastSum);
-
-  // parallel exciter
-  mastIn.connect(excBand).connect(excPre).connect(excWS).connect(excPost).connect(mastSum);
-
-  // high-band width (optional)
-  presenceEQ.connect(splitHP).connect(splitter);
-  splitter.connect(widL, 0); splitter.connect(widR, 1);
-  merger.connect(widMix).connect(mastSum);
-  widL.connect(merger, 0, 0); widR.connect(merger, 0, 1);
-
-  mastSum.connect(limiter).connect(a.destination);
+  mixNode.connect(limiter).connect(a.destination);
 
   // Recorder taps the post-limiter signal so captured audio matches what you hear
   mediaStreamDest=a.createMediaStreamDestination();
   limiter.connect(mediaStreamDest);
 }
-
 
 /* Choose recording mime that works broadly; iOS-friendly first */
 function pickBestAudioMime(){
@@ -572,19 +574,8 @@ function ensureAudio(){
   setupRecordingBus();
   synth=makeSynth(audioCtx);
   pushParams();
-  return Promise.resolve(true);
-}
-
-
-// === Utility: fast parameter smoothing to avoid zipper noise ===
-function setParamSmooth(param, value, time, tau){
-  try{
-    const a = audioCtx || window._stagsynth_synthCtx;
-    const t = time || (a?.currentTime || 0);
-    const k = (typeof tau === 'number') ? tau : 0.008;
-    param.cancelScheduledValues?.(t);
-    param.setTargetAtTime?.(value, t, k);
-  }catch(e){ try{ param.value = value; }catch{} }
+  try{ window.dispatchEvent(new CustomEvent("audio:ready")); }catch(e){}
+return Promise.resolve(true);
 }
 async function hardResetAudio(){
   try{ stopTopRecording(); }catch{}
@@ -663,13 +654,13 @@ function makeSynth(a){
 
   /* === ALWAYS-IN-PATH CORE FILTER === */
   const coreFilter = a.createBiquadFilter();
-  coreFilter.type='lowpass'; coreFilter.frequency.value = 1600; coreFilter.Q.value = 4;
+  coreFilter.type='lowpass'; coreFilter.frequency.value=1600; coreFilter.Q.value=0.2;
 
   /* === Optional COLOR bus (drive + wet/dry) AFTER core filter === */
   const colorDry = a.createGain(); colorDry.gain.value=1.0;
   const colorWet = a.createGain(); colorWet.gain.value=0.0;
   const colorSum = a.createGain();
-  const colorFilter = a.createBiquadFilter(); colorFilter.type='lowpass'; setParamSmooth(colorFilter.frequency, coreFilter.frequency.value); setParamSmooth(colorFilter.Q, coreFilter.Q.value*0.6);
+  const colorFilter = a.createBiquadFilter(); colorFilter.type='lowpass'; colorFilter.frequency.value=1600; colorFilter.Q.value=0.2;
   const colorShaper = a.createWaveShaper(); colorShaper.curve = makeDriveCurve(0);
 
   // coreFilter → (dry→sum) + (filter→shaper→wet→sum)
@@ -698,8 +689,7 @@ function makeSynth(a){
   const chDry = a.createGain(); chDry.gain.value=1.0;
   const chWet = a.createGain(); chWet.gain.value=0.0;
   const chOut = a.createGain();
-  const chWetHP = a.createBiquadFilter(); chWetHP.type="highpass"; chWetHP.frequency.value=180;
-const chDelayL = a.createDelay(0.05), chDelayR = a.createDelay(0.05);
+  const chDelayL = a.createDelay(0.05), chDelayR = a.createDelay(0.05);
   const chLFO1 = a.createOscillator(), chLFO2 = a.createOscillator();
   const chDepthL = a.createGain(), chDepthR = a.createGain();
   chLFO1.type='sine'; chLFO2.type='sine';
@@ -709,7 +699,7 @@ const chDelayL = a.createDelay(0.05), chDelayR = a.createDelay(0.05);
   chIn.connect(chDelayL).connect(chWet);
   chIn.connect(chDelayR).connect(chWet);
   chIn.connect(chDry);
-  chDry.connect(chOut); chWet.connect(chWetHP).connect(chOut);
+  chDry.connect(chOut); chWet.connect(chOut);
   chLFO1.connect(chDepthL).connect(chDelayL.delayTime);
   chLFO2.connect(chDepthR).connect(chDelayR.delayTime);
 
@@ -718,15 +708,13 @@ const chDelayL = a.createDelay(0.05), chDelayR = a.createDelay(0.05);
   const distPre = a.createGain();
   const distWS  = a.createWaveShaper();
   const distTone= a.createBiquadFilter(); distTone.type='lowpass'; distTone.frequency.value=20000;
-  const preEmph = a.createBiquadFilter(); preEmph.type='highshelf'; preEmph.frequency.value=1600; preEmph.gain.value=3;
-  const deEmph = a.createBiquadFilter(); deEmph.type='highshelf'; deEmph.frequency.value=1600; deEmph.gain.value=-3;
-const distDry = a.createGain(); distDry.gain.value=1.0;
+  const distDry = a.createGain(); distDry.gain.value=1.0;
   const distWet = a.createGain(); distWet.gain.value=0.0;
   const distSum = a.createGain();
 
   chOut.connect(distIn);
   distIn.connect(distDry).connect(distSum);
-  distIn.connect(preEmph).connect(distPre).connect(distWS).connect(distTone).connect(deEmph).connect(distWet).connect(distSum);
+  distIn.connect(distPre).connect(distWS).connect(distTone).connect(distWet).connect(distSum);
 
   /* === Bitcrusher (worklet) with MIX === */
   const bcIn  = a.createGain();
@@ -756,12 +744,10 @@ const distDry = a.createGain(); distDry.gain.value=1.0;
   revIn.connect(revDry).connect(revOut);
   revIn.connect(revPre).connect(revConv).connect(revDamp).connect(revWet).connect(revOut);
 
-  const presence = a.createBiquadFilter(); presence.type="peaking"; presence.frequency.value=3200; presence.Q.value=0.7; presence.gain.value=1.8;
-
   /* === Compressor + Makeup → master limiter === */
   const comp = a.createDynamicsCompressor();
   const makeup = a.createGain(); makeup.gain.value=1.0;
-  const synthBus = a.createGain(); synthBus.gain.value=1.0; revOut.connect(presence).connect(comp).connect(makeup).connect(synthBus).connect(mixNode); try{ window._stagsynth_synthBus=synthBus; window._stagsynth_synthCtx=a; }catch{}
+  const synthBus = a.createGain(); synthBus.gain.value=1.0; revOut.connect(comp).connect(makeup).connect(synthBus).connect(mixNode); try{ window._stagsynth_synthBus=synthBus; window._stagsynth_synthCtx=a; }catch{}
 
   // Start carriers/LFOs
   try{ rmCarrier.start(); chLFO1.start(); chLFO2.start(); }catch{}
@@ -800,12 +786,12 @@ const distDry = a.createGain(); distDry.gain.value=1.0;
   // ===== Setters =====
   function applyCoreFilter(){
     coreFilter.type = (params.mode==='hp')?'highpass' : (params.mode==='bp')?'bandpass' : 'lowpass';
-    setParamSmooth(coreFilter.frequency, Math.max(40, params.cutoff||1600));
-    setParamSmooth(coreFilter.Q, Math.max(0, Math.min(20, (params.resonance||0.2)*20)));
+    coreFilter.frequency.value = Math.max(40, params.cutoff||1600);
+    coreFilter.Q.value = Math.max(0, Math.min(20, (params.resonance||0.2)*20));
     // color prefilter follows core tone so drive coloration tracks
     colorFilter.type = coreFilter.type;
-    setParamSmooth(colorFilter.frequency, coreFilter.frequency.value);
-    setParamSmooth(colorFilter.Q, coreFilter.Q.value*0.6);
+    colorFilter.frequency.value = coreFilter.frequency.value;
+    colorFilter.Q.value = coreFilter.Q.value*0.6;
   }
   function setColor(){
     colorShaper.curve = makeDriveCurve(Math.max(0, Math.min(1, params.drive||0)));
@@ -1089,6 +1075,8 @@ function buildKeypad(){
     b.onpointerleave=()=>{ b.classList.remove('on'); routeNoteOff(m); };
     pad.appendChild(b);
   }
+  try{ window.dispatchEvent(new CustomEvent("rebuild:keypad")); }catch(e){}
+
 }
 function bindKeyboard(){
   const map=['a','w','s','e','d','f','t','g','y','h','u','j','k','o','l','p'];
@@ -1945,59 +1933,261 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 
+
+<script>
+// ===== Step Sequencer (overlay-style INPUT, reset-safe) =====
+(function(){
+  let ON=false, PLAY=false, tId=null, step=0;
+  const pattern = new Map();   // step -> Set(MIDI)
+  let held=[];
+  let maxCols=32; let strip=null;
+
+  const $ = (id)=>document.getElementById(id);
+  const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
+
+  function ensureStrip(){
+    if(!strip){ strip = $('seqStepsStrip'); }
+    if(!strip) return;
+    if(strip.childElementCount !== maxCols){
+      strip.innerHTML='';
+      for(let i=0;i<maxCols;i++){
+        const s=document.createElement('div');
+        s.className='led'; s.dataset.index=String(i);
+        strip.appendChild(s);
+      }
+    }
+  }
+
+  function ui(on){
+    const btn = $('seqModeBtn');
+    const panel = $('seqControlsInline');
+    const stripEl = $('seqStepsStrip');
+    if(btn) btn.style.display = on ? 'inline-block' : 'none';
+    if(panel) panel.style.display = on ? 'grid' : 'none';
+    if(stripEl) stripEl.style.display = on ? 'grid' : 'none';
+  }
+
+  function len(){ return Math.max(1, +($('seq_steps')?.value||16)); }
+  function bpm(){ return +($('seq_bpm')?.value||120); }
+  function div(){ return +($('seq_div')?.value||16); }
+  function baseSec(){ return (60/bpm())*(4/div()); }
+  function gateSec(){ return baseSec()*(Math.max(5, +($('seq_gate')?.value||60))/100); }
+  function swing(){ return Math.max(0, +($('seq_swing')?.value||0))/100; }
+  function vel(){ return Math.max(.1, +($('seq_vel')?.value||.9)); }
+  function tr(){ return +($('seq_trans')?.value||0); }
+
+  function renderHighlights(currentIdx, playing){
+    ensureStrip(); const sEl=$('seqStepsStrip');
+    if(sEl){
+      const L=len(); const nodes=$$('.led', sEl);
+      nodes.forEach((n,i)=>{
+        n.classList.remove('active','play','has');
+        if(i<L){
+          const set=pattern.get(i);
+          if(set && set.size) n.classList.add('has');
+          if(i===currentIdx){ n.classList.add(playing?'play':'active'); }
+          n.style.visibility='visible';
+        } else {
+          n.style.visibility='hidden';
+        }
+      });
+    }
+    // Keypad partial lights for current step when not playing
+    const pad=$('keypad');
+    if(pad && !playing){
+      const set=pattern.get(currentIdx)||new Set();
+      $$('.key', pad).forEach(k=>{
+        const m=parseFloat(k.dataset.midi);
+        if(set.has(m)) k.classList.add('seq-has'); else k.classList.remove('seq-has');
+      });
+    }
+  }
+
+  function allOff(){ try{ held.forEach(m=> routeNoteOff(m)); }catch{} held.length=0; }
+  function setOn(v){ ON=!!v; $('seqToggle')?.setAttribute('aria-pressed', String(ON)); ui(ON); if(!ON) setPlay(false); renderHighlights(step, PLAY); }
+  function setPlay(v){
+    PLAY=!!v;
+    const b=$('seqModeBtn');
+    if(b){ b.textContent = PLAY ? 'Play (ON)' : 'Input'; b.setAttribute('aria-pressed', String(PLAY)); }
+    ui(ON);
+    if(PLAY) start(); else { stop(); allOff(); }
+    renderHighlights(step, PLAY);
+  }
+
+  function stop(){ if(tId){ clearTimeout(tId); tId=null; } }
+  function start(){ stop(); tId=setTimeout(tick, 0); }
+
+  function tick(){
+    if(!PLAY){ stop(); return; }
+    const L = len();
+    const s = step % L;
+    const notes = Array.from(pattern.get(s)||[]);
+    const V = vel(), T = tr();
+
+    held = notes.map(m=> m+T);
+    held.forEach(m=> routeNoteOn(m, V));
+
+    // Visual: light currently sounding keys briefly
+    const pad=$('keypad');
+    if(pad){
+      const keys=$$('.key', pad);
+      keys.forEach(k=>{
+        const m=parseFloat(k.dataset.midi);
+        if(held.includes(m)) k.classList.add('seq-play');
+      });
+      setTimeout(()=>{ keys.forEach(k=> k.classList.remove('seq-play')); }, Math.max(60, gateSec()*1000));
+    }
+    renderHighlights(s, true);
+
+    setTimeout(()=>{ held.forEach(m=> routeNoteOff(m)); held=[]; }, Math.max(10, gateSec()*1000));
+
+    const base = baseSec(), sw = swing();
+    const dly = base + ((s%2===1) ? base*sw : 0);
+    step++;
+    tId = setTimeout(tick, Math.max(1, dly*1000));
+  }
+
+  // INPUT delegation on keypad
+  function attachDelegation(){
+    const pad = $('keypad'); if(!pad) return;
+    if(pad.__seqHooked) return; pad.__seqHooked = true;
+    pad.addEventListener('pointerdown', (e)=>{
+      const target = e.target.closest('.key'); if(!target) return;
+      if(ON && !PLAY){
+        e.preventDefault();
+        const midi = parseFloat(target.dataset.midi);
+        const L = len();
+        const s = step % L;
+        let set = pattern.get(s); if(!set){ set=new Set(); pattern.set(s,set); }
+        if(set.has(midi)) set.delete(midi); else set.add(midi);
+        target.classList.add('on'); setTimeout(()=>target.classList.remove('on'), 80);
+        step = (s+1) % L;
+        renderHighlights(step, false);
+      }
+    }, true);
+  }
+
+  // Click LED to jump step (when not playing)
+  
+function attachStripClick(){
+  ensureStrip();
+  const sEl = $('seqStepsStrip');
+  if(!sEl || sEl.__seqHooked) return;
+  sEl.__seqHooked = true;
+
+  // State for mobile double-tap + click suppression
+  let lastTapIdx = -1, lastTapT = 0;
+  let suppressClickUntil = 0;
+
+  // Desktop: double-click clears step
+  sEl.addEventListener('dblclick', (e)=>{
+    const d = e.target.closest('.led'); if(!d) return;
+    const i = +(d.dataset.index);
+    if(!(i < len())) return;
+    e.preventDefault(); e.stopPropagation();
+    pattern.delete(i);
+    // keep selection on this step for continued editing
+    setPlay(false);
+    step = i;
+    renderHighlights(step, false);
+    suppressClickUntil = performance.now() + 350; // prevent following single-click
+  }, true);
+
+  // Mobile: double-tap (two pointerdowns within 300ms on same LED) clears step
+  sEl.addEventListener('pointerdown', (e)=>{
+    const d = e.target.closest('.led'); if(!d) return;
+    const i = +(d.dataset.index);
+    if(!(i < len())) return;
+    const now = performance.now();
+    if (i === lastTapIdx && (now - lastTapT) < 300){
+      e.preventDefault(); e.stopPropagation();
+      pattern.delete(i);
+      setPlay(false);
+      step = i;
+      renderHighlights(step, false);
+      lastTapIdx = -1; lastTapT = 0;
+      suppressClickUntil = now + 350;
+      return;
+    }
+    lastTapIdx = i; lastTapT = now;
+  }, true);
+
+  // Single click: select step for editing (unless suppressed by a double action)
+  sEl.addEventListener('click', (e)=>{
+    const d = e.target.closest('.led'); if(!d) return;
+    const i = +(d.dataset.index);
+    if(!(i < len())) return;
+    if (performance.now() < suppressClickUntil){
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    // select step for input, stop playback
+    setPlay(false);
+    step = i;
+    renderHighlights(step, false);
+  }, true);
+}
+
+
+
+  // Reset-safe hooks
+  window.addEventListener('rebuild:keypad', ()=>{ attachDelegation(); renderHighlights(step, PLAY); });
+  window.addEventListener('audio:ready', ()=>{ attachDelegation(); attachStripClick(); renderHighlights(step, PLAY); if(PLAY) start(); });
+
+  $('seqToggle')?.addEventListener('click', ()=> setOn(!ON));
+  $('seqModeBtn')?.addEventListener('click', ()=> setPlay(!PLAY));
+  $('seq_clear')?.addEventListener('click', ()=> pattern.clear());
+
+  // initial
+  attachDelegation(); attachStripClick(); renderHighlights(step,false);
+  // --- MIDI-aware: intercept global routeNoteOn while in INPUT mode ---
+  if (!window.__seq_origRouteNoteOn && typeof window.routeNoteOn === 'function'){
+    window.__seq_origRouteNoteOn = window.routeNoteOn;
+    window.routeNoteOn = function(midi, velocity=1){
+      if(ON && !PLAY){
+        const L = len();
+        const s = step % L;
+        let set = pattern.get(s); if(!set){ set=new Set(); pattern.set(s,set); }
+        // toggle the incoming MIDI note for this step
+        if(set.has(midi)) set.delete(midi); else set.add(midi);
+        // advance one step for quick entry and update highlights
+        step = (s+1) % L;
+        renderHighlights(step, false);
+        return; // do not sound the note in INPUT mode
+      }
+      // normal behavior
+      return window.__seq_origRouteNoteOn.apply(this, arguments);
+    };
+  }
+
+})();
+</script>
+
+<script>
+(function(){
+  function placeStrip(){
+    const strip = document.getElementById('seqStepsStrip');
+    const pad = document.getElementById('keypad');
+    if(!strip || !pad) return;
+    const parent = pad.parentElement || document.body;
+    // If strip is not already immediately before keypad, move it
+    if (strip.nextElementSibling !== pad){
+      try{ parent.insertBefore(strip, pad); }catch{}
+    }
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', placeStrip);
+  }else{
+    placeStrip();
+  }
+  window.addEventListener('rebuild:keypad', placeStrip);
+  window.addEventListener('audio:ready', placeStrip);
+})();
+</script>
+
 </body>
+
+
+
 </html>
 
-
-
-<script>
-
-// === Gig Boost toggle ===
-let gigOn = false;
-function setGigBoost(on){
-  gigOn = !!on;
-  try{
-    lowShelf.gain.value   = on ? -2.0 : -1.5;
-    presenceEQ.gain.value = on ?  3.0 :  1.8;
-    hiShelf.gain.value    = on ?  2.0 :  1.2;
-    excPost.gain.value    = on ?  0.20:  0.12;
-    widL.gain.value       = on ?  1.08:  1.00;
-    widR.gain.value       = on ?  1.08:  1.00;
-    limiter.threshold.value=on ? -8   : -7;
-  }catch{}
-  const b = document.getElementById('gigBoostBtn');
-  if(b){
-    b.setAttribute('aria-checked', String(on));
-    b.setAttribute('aria-pressed', String(on));
-    b.classList.toggle('ll-on', on);
-  }
-}
-document.getElementById('gigBoostBtn')?.addEventListener('click', ()=> setGigBoost(!gigOn));
-
-</script>
-<script>
-// === Stage Mode: toggles Low Latency + Gig Boost together ===
-let stageOn = false;
-async function setStageMode(on){
-  stageOn = !!on;
-  try{
-    await (window.ensureAudio?.() || Promise.resolve());
-    // Low latency on/off
-    if (typeof applyLowLatencyTweaks === 'function'){
-      applyLowLatencyTweaks(stageOn);
-    }
-    // Gig boost on/off
-    if (typeof setGigBoost === 'function'){
-      setGigBoost(stageOn);
-    }
-  }catch{}
-  const b = document.getElementById('stageModeBtn');
-  if(b){
-    b.setAttribute('aria-checked', String(stageOn));
-    b.setAttribute('aria-pressed', String(stageOn));
-    b.classList.toggle('ll-on', stageOn);
-  }
-}
-document.getElementById('stageModeBtn')?.addEventListener('click', ()=> setStageMode(!stageOn));
-</script>
-</body></html>
