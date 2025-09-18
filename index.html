@@ -108,6 +108,24 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 .kv small{opacity:.8}
 .synth-btn.ll-on{outline:2px solid var(--accent); box-shadow:0 0 10px var(--accent);} 
 #llToggleOverlay{position:relative; z-index:12; pointer-events:auto}
+
+/* === Mobile (phones) sequencer strip sizing === */
+@media (max-width: 480px){
+  #seqStepsStrip{
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(38px, 1fr));
+    gap: 10px;
+    padding: 10px 8px;
+    margin: 8px auto;
+    z-index: 7;
+  }
+  #seqStepsStrip .led{
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    touch-action: manipulation;
+  }
+}
 </style>
 
 <style>
@@ -405,7 +423,6 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     </button>
 <button id="seqToggle" type="button" class="synth-btn" aria-pressed="false" title="Sequencer On/Off">Sequencer</button>
 <button id="seqModeBtn" type="button" class="synth-btn" aria-pressed="false" title="Switch Input/Play" style="display:none">Input</button>
-<button id="seqClearBtn" type="button" class="synth-btn" title="Clear sequence" style="display:none">Clear</button>
     <span id="midiState" class="badge" aria-live="polite"></span>
   </div>
   <div id="keypadWrap" class="keypad-wrap">
@@ -1942,19 +1959,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   const pattern = new Map();   // step -> Set(MIDI)
   let held=[];
   let maxCols=32; let strip=null;
-  let __lastMidi=-1, __lastTs=0;
 
   const $ = (id)=>document.getElementById(id);
   const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
 
   function ensureStrip(){
     if(!strip){ strip = $('seqStepsStrip'); }
-  // Clear button: wipe pattern and reset step
-  (function bindSeqClear(){
-    const b=$('seqClearBtn'); if(!b || b.__bound) return; b.__bound=true;
-    b.addEventListener('click', (e)=>{ e.stopPropagation(); pattern.clear(); step=0; setPlay(false); renderHighlights(step,false); });
-  })();
-
     if(!strip) return;
     if(strip.childElementCount !== maxCols){
       strip.innerHTML='';
@@ -1971,7 +1981,6 @@ document.addEventListener('DOMContentLoaded',()=>{
     const panel = $('seqControlsInline');
     const stripEl = $('seqStepsStrip');
     if(btn) btn.style.display = on ? 'inline-block' : 'none';
-    const clr=$('seqClearBtn'); if(clr) clr.style.display = on ? 'inline-block' : 'none';
     if(panel) panel.style.display = on ? 'grid' : 'none';
     if(stripEl) stripEl.style.display = on ? 'grid' : 'none';
   }
@@ -2062,17 +2071,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(pad.__seqHooked) return; pad.__seqHooked = true;
     pad.addEventListener('pointerdown', (e)=>{
       const target = e.target.closest('.key'); if(!target) return;
-      if(ON && !PLAY){
-        e.preventDefault();
-        const midi = parseFloat(target.dataset.midi);
-        const L = len();
-        const s = step % L;
-        let set = pattern.get(s); if(!set){ set=new Set(); pattern.set(s,set); }
-        if(set.has(midi)) set.delete(midi); else set.add(midi);
-        target.classList.add('on'); setTimeout(()=>target.classList.remove('on'), 80);
-        step = (s+1) % L;
-        renderHighlights(step, false);
-      }
+      if(ON && !PLAY){ e.preventDefault(); return; }
     }, true);
   }
 
@@ -2154,83 +2153,22 @@ function attachStripClick(){
     window.__seq_origRouteNoteOn = window.routeNoteOn;
     window.routeNoteOn = function(midi, velocity=1){
       if(ON && !PLAY){
-        const now = performance.now();
-        if(midi===__lastMidi && (now-__lastTs)<160){ return; } // debounce duplicate taps
-        __lastMidi = midi; __lastTs = now;
-
         const L = len();
         const s = step % L;
         let set = pattern.get(s); if(!set){ set=new Set(); pattern.set(s,set); }
-        // single-note per step
-        set.clear(); set.add(midi);
-
-        // brief audition for feedback
-        try{
-          let did=false;
-          if(window.synth && typeof window.synth.noteOn==='function' && typeof window.synth.noteOff==='function'){
-            window.synth.noteOn(midi, Math.max(0.2, Math.min(1, velocity||1)));
-            setTimeout(()=>{ try{ window.synth.noteOff(midi); }catch(e){} }, 150);
-            did=true;
-          }
-          if(!did){
-            const ac = window.audioCtx || window.a || window._stagsynth_synthCtx;
-            if(ac){
-              const osc = ac.createOscillator();
-              const g = ac.createGain();
-              const f = 440 * Math.pow(2, (midi-69)/12);
-              osc.frequency.value = f;
-              g.gain.value = 0.08;
-              const t0 = ac.currentTime;
-              g.gain.setValueAtTime(0.0, t0);
-              g.gain.linearRampToValueAtTime(0.08, t0 + 0.005);
-              g.gain.linearRampToValueAtTime(0.0,  t0 + 0.14);
-              osc.connect(g).connect(ac.destination);
-              osc.start(t0);
-              osc.stop(t0 + 0.16);
-            }
-          }
-        }catch(e){}
-
+        // toggle the incoming MIDI note for this step
+        if(set.has(midi)) set.delete(midi); else set.add(midi);
         // advance one step for quick entry and update highlights
         step = (s+1) % L;
         renderHighlights(step, false);
-        return; // swallow original
+        return; // do not sound the note in INPUT mode
       }
       // normal behavior
       return window.__seq_origRouteNoteOn.apply(this, arguments);
     };
   }
 
-  // Live update steps without Reset Audio (internal)
-  function bindStepsLive(){
-    const el = $('seq_steps'); if(!el || el.__bound) return; el.__bound = true;
-    el.addEventListener('input', ()=>{
-      maxCols = Math.max(1, +el.value || 16);
-      ensureStrip();
-      renderHighlights(step % maxCols, PLAY);
-    });
-  }
-  function __rebindSeqUI(){ try{ bindStepsLive(); }catch(e){} }
-  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', __rebindSeqUI); } else { __rebindSeqUI(); }
-  window.addEventListener('audio:ready', __rebindSeqUI);
-  window.addEventListener('rebuild:keypad', __rebindSeqUI);
-
 })();
-
-  // Live update steps without Reset Audio
-  (function bindStepsLive(){
-    const el = $('seq_steps'); if(!el || el.__bound) return; el.__bound = true;
-    el.addEventListener('input', ()=>{
-      maxCols = Math.max(1, +el.value || 16);
-      ensureStrip();
-      renderHighlights(step % maxCols, PLAY);
-    });
-  })();
-
-  function __rebindSeqUI(){ try{ bindStepsLive(); }catch(e){} try{ /* keep clear bound */ }catch(e){} }
-  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', __rebindSeqUI); } else { __rebindSeqUI(); }
-  window.addEventListener('audio:ready', __rebindSeqUI);
-  window.addEventListener('rebuild:keypad', __rebindSeqUI);
 </script>
 
 <script>
