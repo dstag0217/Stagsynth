@@ -126,6 +126,25 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     touch-action: manipulation;
   }
 }
+
+/* === Mobile perimeter sequencer around keyboard === */
+@media (max-width: 740px){
+  #seqStepsStrip{ display:none !important; } /* hide horizontal strip on phones */
+  #keypadWrap{ position:relative; }
+  #seqStepsPerimeter{
+    display:block !important;
+    position:absolute; inset:0; pointer-events:none; z-index:6;
+  }
+  .peri-led{
+    position:absolute; width:34px; height:34px; border-radius:10px;
+    background:linear-gradient(#353535,#1a1a1a);
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.08), 0 1px 2px rgba(0,0,0,.6);
+    pointer-events:auto; touch-action:manipulation;
+  }
+  .peri-led.has{ background:linear-gradient(#4a4a4a,#252525); }
+  .peri-led.active{ box-shadow:inset 0 0 0 2px rgba(255,211,77,.95), 0 0 10px rgba(255,211,77,.7); }
+  .peri-led.play{ background:#ff9f0040; }
+}
 </style>
 
 <style>
@@ -423,9 +442,12 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     </button>
 <button id="seqToggle" type="button" class="synth-btn" aria-pressed="false" title="Sequencer On/Off">Sequencer</button>
 <button id="seqModeBtn" type="button" class="synth-btn" aria-pressed="false" title="Switch Input/Play" style="display:none">Input</button>
+<button id="seqClearBtn" type="button" class="synth-btn" style="display:none" title="Clear current sequence">Clear</button>
     <span id="midiState" class="badge" aria-live="polite"></span>
   </div>
   <div id="keypadWrap" class="keypad-wrap">
+  <div id="seqStepsPerimeter" style="display:none"></div>
+
     <div id="keypad" class="keypad" aria-label="Keypad"></div>
   </div>
 </main>
@@ -1981,6 +2003,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     const panel = $('seqControlsInline');
     const stripEl = $('seqStepsStrip');
     if(btn) btn.style.display = on ? 'inline-block' : 'none';
+    const clr=document.getElementById('seqClearBtn'); if(clr) clr.style.display = on ? 'inline-block' : 'none';
     if(panel) panel.style.display = on ? 'grid' : 'none';
     if(stripEl) stripEl.style.display = on ? 'grid' : 'none';
   }
@@ -2190,6 +2213,145 @@ function attachStripClick(){
   }
   window.addEventListener('rebuild:keypad', placeStrip);
   window.addEventListener('audio:ready', placeStrip);
+})();
+</script>
+
+
+<script>
+(function(){
+  const $  = (sel,root=document)=> root.querySelector(sel);
+  const $$ = (sel,root=document)=> Array.from(root.querySelectorAll(sel));
+  const isPhone = ()=> window.matchMedia('(max-width: 740px)').matches;
+  let peri = null;
+
+  function bindClear(){
+    const b = document.getElementById('seqClearBtn');
+    if(!b || b.__bound) return;
+    b.__bound = true;
+    b.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      try{ if(window.pattern) window.pattern.clear(); }catch{}
+      try{ if(typeof window.setPlay==='function') window.setPlay(false); }catch{}
+      try{ if(typeof window.step!=='undefined') window.step = 0; }catch{}
+      try{ if(typeof window.renderHighlights==='function') window.renderHighlights(window.step||0, window.PLAY); }catch{}
+    });
+  }
+
+  function ensurePerimeter(){
+    if(!isPhone()) return;
+    const wrap = document.getElementById('keypadWrap');
+    if(!wrap) return;
+    if(!peri) peri = document.getElementById('seqStepsPerimeter');
+    if(!peri) return;
+    const L = (typeof window.len==='function') ? window.len() : 16;
+    // Rebuild if different count
+    if(peri.childElementCount !== L){
+      peri.innerHTML = '';
+      const r = wrap.getBoundingClientRect();
+      const w = r.width, h = r.height;
+      const inset = 6, size = 34;
+      const topY = inset, bottomY = h - inset - size;
+      const leftX = inset, rightX = w - inset - size;
+      const topCount = Math.max(4, Math.floor((w-2*inset)/(size+4)));
+      const bottomCount = topCount;
+      const sideCount = Math.max(4, Math.floor((h-2*inset)/(size+4)));
+      const totalSlots = topCount + bottomCount + 2*sideCount;
+      for(let i=0;i<L;i++){
+        const d = document.createElement('div');
+        d.className = 'peri-led'; d.dataset.index = String(i);
+        const t = i / L * totalSlots;
+        const slot = Math.floor(t);
+        let x=0,y=0;
+        if(slot < topCount){
+          x = leftX + slot * ((w-2*inset - size) / Math.max(1, topCount-1));
+          y = topY;
+        }else if(slot < topCount + sideCount){
+          const k = slot - topCount;
+          x = rightX; y = topY + k * ((h-2*inset - size) / Math.max(1, sideCount-1));
+        }else if(slot < topCount + sideCount + bottomCount){
+          const k = slot - topCount - sideCount;
+          x = rightX - k * ((w-2*inset - size) / Math.max(1, bottomCount-1));
+          y = bottomY;
+        }else{
+          const k = slot - topCount - sideCount - bottomCount;
+          x = leftX; y = bottomY - k * ((h-2*inset - size) / Math.max(1, sideCount-1));
+        }
+        d.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+        peri.appendChild(d);
+      }
+      // interactions
+      peri.addEventListener('click', (e)=>{
+        const d = e.target.closest('.peri-led'); if(!d) return;
+        const i = +d.dataset.index;
+        try{ if(typeof window.setPlay==='function') window.setPlay(false); }catch{}
+        try{ window.step = i; }catch{}
+        try{ if(typeof window.renderHighlights==='function') window.renderHighlights(i, false); }catch{}
+      }, true);
+
+      // double to clear (desktop double-click + mobile double-tap)
+      peri.addEventListener('dblclick', (e)=>{
+        const d = e.target.closest('.peri-led'); if(!d) return;
+        const i = +d.dataset.index;
+        try{ if(window.pattern) window.pattern.delete(i); }catch{}
+        try{ if(typeof window.setPlay==='function') window.setPlay(false); }catch{}
+        try{ window.step = i; }catch{}
+        try{ if(typeof window.renderHighlights==='function') window.renderHighlights(i, false); }catch{}
+      }, true);
+      let last=-1, lastT=0;
+      peri.addEventListener('pointerdown', (e)=>{
+        const d = e.target.closest('.peri-led'); if(!d) return;
+        const i = +d.dataset.index;
+        const now = performance.now();
+        if(i===last && (now-lastT)<300){
+          try{ if(window.pattern) window.pattern.delete(i); }catch{}
+          try{ if(typeof window.setPlay==='function') window.setPlay(false); }catch{}
+          try{ window.step = i; }catch{}
+          try{ if(typeof window.renderHighlights==='function') window.renderHighlights(i, false); }catch{}
+          last=-1; lastT=0;
+          e.preventDefault(); e.stopPropagation();
+          return;
+        }
+        last=i; lastT=now;
+      }, true);
+    }
+  }
+
+  // Wrap renderHighlights to also update perimeter LEDs without touching original logic
+  if(typeof window.renderHighlights === 'function' && !window.__periWrapped){
+    window.__periWrapped = true;
+    const old = window.renderHighlights;
+    window.renderHighlights = function(currentIdx, playing){
+      try{ old(currentIdx, playing); }catch(e){}
+      try{
+        if(!isPhone()) return;
+        ensurePerimeter();
+        const L = (typeof window.len==='function') ? window.len() : 16;
+        const nodes = $$('.peri-led', peri||document);
+        nodes.forEach((n,i)=>{
+          n.classList.remove('active','play','has');
+          if(i < L){
+            const set = window.pattern ? window.pattern.get(i) : null;
+            if(set && set.size) n.classList.add('has');
+            if(i === currentIdx){ n.classList.add(playing ? 'play' : 'active'); }
+            n.style.visibility = 'visible';
+          } else {
+            n.style.visibility = 'hidden';
+          }
+        });
+      }catch(e){}
+    };
+  }
+
+  function kick(){
+    bindClear();
+    ensurePerimeter();
+    try{ if(typeof window.renderHighlights==='function') window.renderHighlights(window.step||0, window.PLAY); }catch(e){}
+  }
+
+  if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', kick); } else { kick(); }
+  window.addEventListener('resize', ()=>{ peri=null; ensurePerimeter(); try{ window.renderHighlights(window.step||0, window.PLAY); }catch(e){} });
+  window.addEventListener('rebuild:keypad', ()=>{ peri=null; kick(); });
+  window.addEventListener('audio:ready', kick);
 })();
 </script>
 
