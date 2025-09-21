@@ -1,8 +1,6 @@
 <!doctype html>
 <html lang="en">
 <head>
-<script>try{ if(typeof window.$!=='function'){ window.$ = (id)=>document.getElementById(id); } }catch{}</script>
-
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>StagSynth — FINAL FX Fix</title>
@@ -113,20 +111,12 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 </style>
 
 <style>
-<style>
-/* Sequencer mobile layout */
-@media (max-width: 540px){
-  #seqStepsStrip{ display:grid; grid-template-columns: repeat(var(--seq-cols,16), 1fr); grid-auto-rows: var(--seq-rowh, 32px); gap:8px; width:96vw; margin:10px auto 14px auto; touch-action: manipulation; }
-  #seqStepsStrip .led{ min-height:32px; border-radius:10px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
-}
-@media (min-width: 541px) and (max-width: 900px){
-  #seqStepsStrip{
-    width: 96vw;
-    gap:5px;
-  }
+/* seq media */
+@media (max-width: 480px){
+  #seqStepsStrip{position:relative; margin:10px auto 8px auto; width:min(860px,98vw); display:grid; grid-template-columns: repeat(32, 1fr); gap:5px; z-index:1;}
+  #seqStepsStrip .led{height:12px; border-radius:4px; background:#1e1e1e; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);}
 }
 </style>
-
 
 
 <style>
@@ -134,10 +124,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 @media (max-width: 900px){
   #seqStepsStrip{ width: 96vw; gap:4px; }
 }
-@media (max-width: 540px){
-  #seqStepsStrip{ width: 96vw; gap:3px; margin:8px auto 10px auto; }
-  #seqStepsStrip .led{ height:14px; border-radius:5px; }
-}
+@media (max-width: 540px){  #seqStepsStrip{display:grid;grid-template-columns:repeat(var(--seq-cols,12),1fr);grid-auto-rows:var(--seq-rowh,34px);gap:8px;width:96vw;margin:10px auto 14px auto;touch-action:manipulation}  #seqStepsStrip .led{min-height:34px;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}}
 </style>
 
 </head>
@@ -616,9 +603,6 @@ function makeDriveCurve(amount=0){
 /* ===== Bitcrusher Worklet (inline) ===== */
 let bitcrusherNode=null, bitcrusherMix=null;
 async function initBitcrusherWorklet(ctx){
-  const isLocalFile = typeof location!=='undefined' && location.protocol==='file:';
-  const isSecure = (typeof isSecureContext!=='undefined' && isSecureContext) || (location && (location.protocol==='https:' || location.hostname==='localhost'));
-  if(!ctx.audioWorklet || !isSecure || isLocalFile){ ctx._bcRegistered=false; ctx._bcLoading=false; return; }
   if(ctx.audioWorklet && !ctx._bcRegistered && !ctx._bcLoading){
     ctx._bcLoading=true;
     const code = `
@@ -652,12 +636,10 @@ async function initBitcrusherWorklet(ctx){
       }
       try{ if(!globalThis.__bitcrusherRegistered){ registerProcessor('bitcrusher-processor', BitcrusherProcessor); globalThis.__bitcrusherRegistered=true; } }catch(e){ globalThis.__bitcrusherRegistered=true; }
     `;
-    try{
-      const blob = new Blob([code], {type:'application/javascript'});
-      const url  = URL.createObjectURL(blob);
-      await ctx.audioWorklet.addModule(url);
-      URL.revokeObjectURL(url);
-    }catch(e){ console.warn('[bitcrusher] worklet unavailable, falling back (', e && e.name, ')'); }
+    const blob = new Blob([code], {type:'application/javascript'});
+    const url  = URL.createObjectURL(blob);
+    await ctx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
     ctx._bcRegistered = true;
     ctx._bcLoading = false;
   }
@@ -739,24 +721,12 @@ function makeSynth(a){
   const bcSum = a.createGain();
   distSum.connect(bcIn);
   bcIn.connect(bcDry).connect(bcSum);
-  
-(async ()=>{
-  await initBitcrusherWorklet(a);
-  if (a._bcRegistered) {
-    try{
-      const node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
-      bitcrusherNode = node;
-    }catch(e){
-      console.warn('[bitcrusher] node creation failed', e && e.name);
-      bitcrusherNode = null;
-    }
-  } else {
-    console.warn('[bitcrusher] worklet not registered; bypassing');
-    bitcrusherNode = null;
-  }
-
+  (async ()=>{
+    await initBitcrusherWorklet(a);
+    const node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
+    bitcrusherNode = node;
     bitcrusherMix  = { dry: bcDry, wet: bcWet };
-    if(bitcrusherNode){ bcIn.connect(bitcrusherNode).connect(bcWet); }
+    bcIn.connect(node).connect(bcWet);
     bcWet.connect(bcSum);
   })();
 
@@ -1537,9 +1507,92 @@ document.addEventListener('DOMContentLoaded', main);
   document.addEventListener('DOMContentLoaded', bindLL, {once:true});
   window.toggleLL = (on)=> applyLowLatencyTweaks(on==null ? !LOW_LATENCY : !!on);
 })();
+
+// Dynamically size mobile step grid for comfortable tapping
+function updateSeqGridForSteps(){
+  try{
+    const strip = document.getElementById('seqStepsStrip');
+    const el = document.getElementById('seq_steps');
+    if(!strip || !el) return;
+    const steps = Math.max(1, +el.value || 16);
+    const isMobile = window.matchMedia && window.matchMedia('(max-width: 540px)').matches;
+    const cols = isMobile ? Math.min(12, Math.max(6, steps)) : steps;
+    const rowh = isMobile ? 34 : 22;
+    strip.style.setProperty('--seq-cols', String(cols));
+    strip.style.setProperty('--seq-rowh', rowh + 'px');
+  }catch(e){ /* no-op */ }
+}
 </script>
 
 
+<script>
+(function(){
+  let vocCtx={ inited:false, bands:[], modStream:null, modSrc:null, modPre:null, sibHP:null, sibGain:null, envLPs:[], carBPFs:[], modBPFs:[], vcaGains:[], wet:null, dry:null, out:null, sum:null, carIn:null, modGate:null, modGain:null, carrierSel:'off' };
+  function hzForBand(i,N,lo,hi,semi){ const f=lo*Math.pow(hi/lo,i/(N-1)); return f*Math.pow(2,(semi||0)/12); }
+
+  async function ensureMic(){ if(vocCtx.modSrc) return true; try{ const ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false}); vocCtx.modStream=ms; await ensureAudio(); const a=audioCtx; vocCtx.modSrc=a.createMediaStreamSource(ms); vocCtx.modGain=a.createGain(); vocCtx.modGain.gain.value=parseFloat(document.getElementById('voc_mod_gain').value||1); vocCtx.modPre=a.createBiquadFilter(); vocCtx.modPre.type='highpass'; vocCtx.modPre.frequency.value=90; vocCtx.modGate=a.createDynamicsCompressor(); vocCtx.modGate.threshold.value=parseFloat(document.getElementById('voc_gate').value||-70); vocCtx.modGate.ratio.value=20; vocCtx.modGate.knee.value=0; vocCtx.modGate.attack.value=0.005; vocCtx.modGate.release.value=0.25; vocCtx.modSrc.connect(vocCtx.modGain).connect(vocCtx.modPre).connect(vocCtx.modGate); return true; }catch(e){ const s=document.getElementById('voc_status'); if(s) s.textContent='Mic permission denied'; return false; } }
+
+  function destroyBands(){ vocCtx.bands.forEach(b=>{ try{ b.modBPF.disconnect(); b.carBPF.disconnect(); b.envRect?.disconnect(); b.envLP.disconnect(); b.vca.disconnect(); }catch{} }); vocCtx.bands=[]; try{ vocCtx.sum?.disconnect(); }catch{} }
+
+  function rebuildVocoder(){ if(!window.audioCtx) return; const a=audioCtx; destroyBands(); if(!vocCtx.wet){ vocCtx.wet=a.createGain(); } if(!vocCtx.dry){ vocCtx.dry=a.createGain(); } if(!vocCtx.out){ vocCtx.out=a.createGain(); } if(!vocCtx.sum){ vocCtx.sum=a.createGain(); vocCtx.sum.gain.value=1; }
+    const N=parseInt(document.getElementById('voc_bands').value||12,10), lo=parseFloat(document.getElementById('voc_lo').value||200), hi=parseFloat(document.getElementById('voc_hi').value||5000), Q=parseFloat(document.getElementById('voc_q').value||2.0), sh=parseFloat(document.getElementById('voc_shift').value||0), att=Math.max(0.0005,(parseFloat(document.getElementById('voc_att').value||12))/1000), rel=Math.max(0.005,(parseFloat(document.getElementById('voc_rel').value||160))/1000);
+    vocCtx.wet.gain.value=parseFloat(document.getElementById('voc_mix').value||0); vocCtx.dry.gain.value=1-vocCtx.wet.gain.value; vocCtx.out.gain.value=parseFloat(document.getElementById('voc_out').value||1);
+    if(!vocCtx.sibHP){ vocCtx.sibHP=a.createBiquadFilter(); vocCtx.sibHP.type='highpass'; vocCtx.sibHP.frequency.value=5000; } if(!vocCtx.sibGain){ vocCtx.sibGain=a.createGain(); } vocCtx.sibGain.gain.value=parseFloat(document.getElementById('voc_sib').value||0.15);
+    for(let i=0;i<N;i++){ const fc=hzForBand(i,N,lo,hi,sh); const modBPF=a.createBiquadFilter(); modBPF.type='bandpass'; modBPF.Q.value=Q; modBPF.frequency.value=fc; const carBPF=a.createBiquadFilter(); carBPF.type='bandpass'; carBPF.Q.value=Q; carBPF.frequency.value=fc; const rect=a.createWaveShaper(); const n=2048,curve=new Float32Array(n); for(let j=0;j<n;j++){ const x=j/(n-1)*2-1; curve[j]=Math.abs(x);} rect.curve=curve; rect.oversample='2x'; const envLP=a.createBiquadFilter(); envLP.type='lowpass'; envLP.frequency.value=1/(2*Math.PI*att)*0.25; const vca=a.createGain(); vca.gain.value=0; vocCtx.modGate.connect(modBPF).connect(rect).connect(envLP); envLP.connect(vca.gain); vocCtx.carIn.connect(carBPF).connect(vca).connect(vocCtx.sum); vocCtx.bands.push({modBPF,carBPF,envRect:rect,envLP,vca}); }
+    vocCtx.modGate.connect(vocCtx.sibHP).connect(vocCtx.sibGain).connect(vocCtx.sum);
+    try{ vocCtx.wet.disconnect(); vocCtx.dry.disconnect(); vocCtx.out.disconnect(); }catch{}
+    vocCtx.sum.connect(vocCtx.wet).connect(vocCtx.out).connect(mixNode);
+  }
+
+  function waitForSynthBusAndWire(maxMs=4000){
+    const t0=performance.now();
+    (function tick(){
+      const bus=window._stagsynth_synthBus;
+      if(bus && vocCtx?.carIn){ try{ vocCtx.carIn.disconnect(); }catch{} bus.connect(vocCtx.carIn); console.log('[voc] carrier wired to synthBus'); return; }
+      if(performance.now()-t0<maxMs) requestAnimationFrame(tick);
+    })();
+  }
+
+  function setCarrier(sel){
+    vocCtx.carrierSel=sel; if(!window.audioCtx) return;
+    if(!vocCtx.carIn){ vocCtx.carIn=audioCtx.createGain(); vocCtx.carIn.gain.value=1; }
+    try{ vocCtx.carIn.disconnect(); }catch{}
+    const synthBus=window._stagsynth_synthBus;
+    const samOut=(typeof samplerBus==='object' && samplerBus.out) ? samplerBus.out : null;
+    if(sel==='synth'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); }
+    else if(sel==='sampler'){ if(samOut) samOut.connect(vocCtx.carIn); }
+    else if(sel==='both'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); if(samOut) samOut.connect(vocCtx.carIn); }
+  }
+
+  async function enableVocoderIfNeeded(){
+    const sel=document.getElementById('voc_carrier').value;
+    const needOn=(sel!=='off'); if(!needOn) return;
+    await ensureAudio(); const ok=await ensureMic(); if(!ok) return;
+    if(!vocCtx.inited){ vocCtx.inited=true; }
+    setCarrier(sel); rebuildVocoder();
+    const s=document.getElementById('voc_status'); if(s) s.textContent='Vocoder ready';
+  }
+
+  // Bind UI
+  document.addEventListener('DOMContentLoaded',()=>{
+    const btn=document.getElementById('vocoderToggle');
+    const panel=document.getElementById('vocoderPanel');
+    if(btn && panel){
+      btn.onclick=()=>{ const o=panel.classList.toggle('open'); btn.setAttribute('aria-expanded', o?'true':'false'); if(o) enableVocoderIfNeeded(); };
+    }
+    const id=s=>document.getElementById(s);
+    id('voc_carrier')?.addEventListener('change', async ()=>{ await enableVocoderIfNeeded(); setCarrier(vocCtx.carrierSel); });
+    ['voc_bands','voc_lo','voc_hi','voc_q','voc_shift','voc_att','voc_rel','voc_sib'].forEach(k=> id(k)?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off'){ rebuildVocoder(); }}));
+    id('voc_mix')?.addEventListener('input', ()=>{ const mix=parseFloat(id('voc_mix').value||0); if(vocCtx.wet) vocCtx.wet.gain.value=mix; if(vocCtx.dry) vocCtx.dry.gain.value=1-mix; });
+    id('voc_out')?.addEventListener('input', ()=>{ if(vocCtx.out) vocCtx.out.gain.value=parseFloat(id('voc_out').value||1); });
+    id('voc_mod_gain')?.addEventListener('input', ()=>{ if(vocCtx.modGain) vocCtx.modGain.gain.value=parseFloat(id('voc_mod_gain').value||1); });
+    id('voc_gate')?.addEventListener('input', ()=>{ if(vocCtx.modGate) vocCtx.modGate.threshold.value=parseFloat(id('voc_gate').value||-70); });
+    id('voc_att')?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off') rebuildVocoder(); });
+    id('voc_rel')?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off') rebuildVocoder(); });
+    id('voc_test')?.addEventListener('click', async ()=>{ const ok=await ensureMic(); const s=id('voc_status'); if(s) s.textContent= ok ? 'Mic OK' : 'Mic blocked'; });
+  });
+})();
+</script>
 
 
 
@@ -1550,20 +1603,13 @@ document.addEventListener('DOMContentLoaded', main);
   function hzForBand(i,N,lo,hi,semi){ const f=lo*Math.pow(hi/lo,i/(N-1)); return f*Math.pow(2,(semi||0)/12); }
 
   async function ensureMic(){
-    if(!((typeof isSecureContext!=='undefined' && isSecureContext) || (location && (location.protocol==='https:' || location.hostname==='localhost')))){
-      const s=document.getElementById('voc_status'); if(s) s.textContent='Mic needs HTTPS or localhost';
-      return false;
-    }
-    
     if(vocCtx.modSrc) return true;
-    if(vocCtx._micPromise) return await vocCtx._micPromise;
     try{
-      vocCtx._micPromise = navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
+      const ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
       vocCtx.modStream=ms;
       await ensureAudio();
       const a=audioCtx;
       vocCtx.modSrc=a.createMediaStreamSource(ms);
-      try{ vocCtx._micPromise = Promise.resolve(true); }catch{};
       vocCtx.modGain=a.createGain(); vocCtx.modGain.gain.value=parseFloat(document.getElementById('voc_mod_gain').value||1);
       vocCtx.modPre=a.createBiquadFilter(); vocCtx.modPre.type='highpass'; vocCtx.modPre.frequency.value=90;
       vocCtx.modGate=a.createDynamicsCompressor();
@@ -1572,7 +1618,8 @@ document.addEventListener('DOMContentLoaded', main);
       vocCtx.modSrc.connect(vocCtx.modGain).connect(vocCtx.modPre).connect(vocCtx.modGate);
       return true;
     }catch(e){
-      const s=document.getElementById('voc_status'); if(s) s.textContent='Mic permission denied (browser)'; try{ vocCtx._micPromise = Promise.resolve(false); }catch{}; return false;
+      const s=document.getElementById('voc_status'); if(s) s.textContent='Mic permission denied';
+      return false;
     }
   }
 
@@ -1598,7 +1645,7 @@ document.addEventListener('DOMContentLoaded', main);
           att=Math.max(0.0005,(parseFloat(document.getElementById('voc_att').value||12))/1000),
           rel=Math.max(0.005,(parseFloat(document.getElementById('voc_rel').value||160))/1000);
 
-    (()=>{ const v=parseFloat(document.getElementById('voc_mix').value); const m=(isFinite(v)?v:0.6); vocCtx.wet.gain.value=m; vocCtx.dry.gain.value=1-m; })();
+    vocCtx.wet.gain.value=parseFloat(document.getElementById('voc_mix').value||0);
     vocCtx.dry.gain.value=1-vocCtx.wet.gain.value;
     vocCtx.out.gain.value=parseFloat(document.getElementById('voc_out').value||1);
 
@@ -1621,20 +1668,7 @@ document.addEventListener('DOMContentLoaded', main);
     vocCtx.modGate.connect(vocCtx.sibHP).connect(vocCtx.sibGain).connect(vocCtx.sum);
 
     try{ vocCtx.wet.disconnect(); vocCtx.dry.disconnect(); vocCtx.out.disconnect(); }catch{}
-// Wet: sum of vocal-modulated bands (+sibilance) → wet gain
-try{ vocCtx.sum.disconnect(); }catch{}
-vocCtx.sum.connect(vocCtx.wet);
-// Dry: direct carrier passthrough for intelligibility and Wet/Dry blending
-try{ vocCtx.carIn && vocCtx.carIn.disconnect(vocCtx.dry); }catch{}
-if (vocCtx.carIn) vocCtx.carIn.connect(vocCtx.dry);
-// Mixdown to out → master mixNode
-try{ vocCtx.wet.disconnect(vocCtx.out); }catch{}
-try{ vocCtx.dry.disconnect(vocCtx.out); }catch{}
-vocCtx.wet.connect(vocCtx.out);
-vocCtx.dry.connect(vocCtx.out);
-try{ vocCtx.out.disconnect(); }catch{}
-vocCtx.out.connect(mixNode);
-
+    vocCtx.sum.connect(vocCtx.wet).connect(vocCtx.out).connect(mixNode);
   }
 
   function waitForSynthBusAndWire(maxMs=4000){
@@ -1680,7 +1714,7 @@ vocCtx.out.connect(mixNode);
       btn.onclick=()=>{ const o=panel.classList.toggle('open'); btn.setAttribute('aria-expanded', o?'true':'false'); if(o) enableVocoderIfNeeded(); };
     }
     const id=s=>document.getElementById(s);
-    id('voc_carrier')?.addEventListener('change', async ()=>{ await enableVocoderIfNeeded(); setCarrier(document.getElementById('voc_carrier').value); });
+    id('voc_carrier')?.addEventListener('change', async ()=>{ await enableVocoderIfNeeded(); setCarrier(vocCtx.carrierSel); });
     ['voc_bands','voc_lo','voc_hi','voc_q','voc_shift','voc_att','voc_rel','voc_sib'].forEach(k=> id(k)?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off'){ rebuildVocoder(); }}));
     id('voc_mix')?.addEventListener('input', ()=>{ const mix=parseFloat(id('voc_mix').value||0); if(vocCtx.wet) vocCtx.wet.gain.value=mix; if(vocCtx.dry) vocCtx.dry.gain.value=1-mix; });
     id('voc_out')?.addEventListener('input', ()=>{ if(vocCtx.out) vocCtx.out.gain.value=parseFloat(id('voc_out').value||1); });
@@ -1725,7 +1759,191 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 </script>
 
-<!-- removed duplicate Vocoder v2 block to prevent conflicts -->
+<script>
+/* ========= Vocoder v2 (add-only) — uses your existing UI, zero changes elsewhere ========= */
+(function(){
+  if (window.__VocoderV2Mounted) return; window.__VocoderV2Mounted = true;
+  const $ = (id)=>document.getElementById(id);
+
+  let ctx=null, wet=null, out=null, noiseGain=null, noiseGen=null;
+  let bands=[], modHP=null, micStream=null, micSrc=null;
+
+  // Tuned defaults (you can keep using your UI to tweak)
+  const cfg = { nb:16, lo:160, hi:6000, attMs:12, relMs:120, envGain:3.0, noise:0.0, wet:0.6, out:1.0 };
+
+  // Wait for your audio engine (no changes to your code)
+  async function boot(){
+    if (!window.ensureAudio) return;
+    await ensureAudio();
+    ctx = window.audioCtx;
+    if (!ctx || !window.mixNode) return;
+
+    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch{} }
+
+    if (!wet) {
+      // Outputs
+      wet = ctx.createGain();   wet.gain.value = parseFloat($('#voc_wet')?.value ?? cfg.wet);
+      out = ctx.createGain();   out.gain.value = parseFloat($('#voc_out')?.value ?? cfg.out);
+      noiseGain = ctx.createGain(); noiseGain.gain.value = parseFloat($('#voc_noise')?.value ?? cfg.noise);
+
+      // Light noise to recover sibilants
+      noiseGen = ctx.createBufferSource();
+      const nbuf = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
+      const d = nbuf.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+      noiseGen.buffer = nbuf; noiseGen.loop = true; try{ noiseGen.start(); }catch{}
+      noiseGen.connect(noiseGain);
+
+      // Sum → your master bus
+      wet.connect(out);
+      noiseGain.connect(out);
+      out.connect(window.mixNode);
+
+      // Build and wire
+      readCfg(); rebuildBands(); connectRouting();
+    }
+  }
+
+  function readCfg(){
+    cfg.nb     = parseInt($('#voc_bands')?.value ?? cfg.nb, 10) || cfg.nb;
+    cfg.lo     = Math.max(40, parseFloat($('#voc_lo')?.value ?? cfg.lo));
+    cfg.hi     = Math.max(cfg.lo+200, parseFloat($('#voc_hi')?.value ?? cfg.hi));
+    cfg.attMs  = parseFloat($('#voc_att')?.value ?? cfg.attMs);
+    cfg.relMs  = parseFloat($('#voc_rel')?.value ?? cfg.relMs);
+    // Keep envGain internal; we bias it so the bands actually open
+  }
+
+  function destroyBands(){
+    bands.forEach(b=>{
+      try{ b.modBP.disconnect(); b.rect.disconnect(); b.envLP.disconnect(); b.envGain.disconnect(); b.carBP.disconnect(); b.mul.disconnect(); }catch{}
+    });
+    bands.length = 0;
+  }
+
+  function hz(i,n,lo,hi){ const t = n<=1 ? 0 : i/(n-1); return Math.exp(Math.log(lo) + t*(Math.log(hi)-Math.log(lo))); }
+
+  function rebuildBands(){
+    if (!ctx) return;
+    destroyBands();
+
+    for(let i=0;i<cfg.nb;i++){
+      const f = hz(i, cfg.nb, cfg.lo, cfg.hi);
+
+      // Modulator path: bandpass -> rectify -> lowpass (envelope) -> envGain (crucial!)
+      const modBP = ctx.createBiquadFilter(); modBP.type='bandpass'; modBP.frequency.value=f; modBP.Q.value=8;
+
+      const rect = ctx.createWaveShaper();
+      const curve = new Float32Array(65536);
+      for (let j=0;j<curve.length;j++){ const x=j/32768-1; curve[j]=Math.abs(x); }
+      rect.curve = curve;
+
+      const envLP = ctx.createBiquadFilter(); envLP.type='lowpass';
+      // Low cutoff gives a smooth envelope; attack/release are applied via coefficient math below
+      envLP.frequency.value = 60;
+
+      const envGain = ctx.createGain(); envGain.gain.value = cfg.envGain; // <-- boosts envelope amplitude
+
+      // Carrier path: bandpass
+      const carBP = ctx.createBiquadFilter(); carBP.type='bandpass'; carBP.frequency.value=f; carBP.Q.value=8;
+
+      // Multiply (envelope controls car band gain)
+      const mul = ctx.createGain(); mul.gain.value = 0;
+
+      // Wire per-band
+      modBP.connect(rect).connect(envLP).connect(envGain).connect(mul.gain);
+      carBP.connect(mul);
+      mul.connect(wet);
+
+      bands.push({modBP, rect, envLP, envGain, carBP, mul});
+    }
+  }
+
+  async function setMic(on){
+    const badge = $('#voc_micStatus');
+    if (on){
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+        });
+        micStream = stream; micSrc = ctx.createMediaStreamSource(stream);
+        modHP = ctx.createBiquadFilter(); modHP.type='highpass'; modHP.frequency.value = 120;
+        micSrc.connect(modHP);
+        if (badge) badge.textContent = 'Mic: on';
+      }catch(e){
+        if (badge) badge.textContent = 'Mic permission denied';
+      }
+    }else{
+      try{ micStream?.getTracks().forEach(t=>t.stop()); }catch{}
+      micStream=null; micSrc=null; modHP=null;
+      if (badge) badge.textContent = 'Mic: off';
+    }
+  }
+
+  function pickCarrier(){
+    const choice = $('#voc_carrier')?.value || 'synth';
+    // Prefer explicit sampler bus if chosen
+    if (choice==='sampler' && window.samplerBus?.out) return window.samplerBus.out;
+
+    // If your synth exposes a carrier tap, use it
+    try{
+      const tap = window.synth?.getVocoderCarrierTap?.();
+      if (tap) return tap;
+    }catch{}
+
+    // Safe fallback: pre-limiter mix (still produces vocoder effect)
+    return window.mixNode || null;
+  }
+
+  function connectRouting(){
+    // Disconnect prior
+    bands.forEach(b=>{ try{ b.modBP.disconnect(); }catch{} try{ b.carBP.disconnect(); }catch{} });
+
+    // Modulator (mic) → all mod bands
+    if (modHP){ bands.forEach(b=> modHP.connect(b.modBP)); }
+
+    // Carrier → all carrier bands
+    const car = pickCarrier();
+    if (car){ bands.forEach(b=> car.connect(b.carBP)); }
+
+    // Apply current gains
+    if (wet)       wet.gain.value       = parseFloat($('#voc_wet')?.value ?? cfg.wet);
+    if (out)       out.gain.value       = parseFloat($('#voc_out')?.value ?? cfg.out);
+    if (noiseGain) noiseGain.gain.value = parseFloat($('#voc_noise')?.value ?? cfg.noise);
+
+    // Optional: simple envelope “feel” by tweaking envLP frequency in relation to attack/release
+    const att = Math.max(0.001, (parseFloat($('#voc_att')?.value ?? cfg.attMs))/1000);
+    const rel = Math.max(0.005, (parseFloat($('#voc_rel')?.value ?? cfg.relMs))/1000);
+    const smoothHz = Math.max(20, 1/Math.max(att, rel)); // higher cutoff = faster envelope
+    bands.forEach(b=> b.envLP.frequency.value = smoothHz);
+  }
+
+  // Bind only your Vocoder controls; avoids touching other UI
+  function bindUI(){
+    $('#startBtn')?.addEventListener('click', boot);
+    $('#resetBtn')?.addEventListener('click', ()=> setTimeout(boot,50));
+
+    $('#voc_enableMic')?.addEventListener('change', async (e)=>{
+      await boot();
+      await setMic(e.target.checked);
+      connectRouting();
+    });
+    $('#voc_carrier')?.addEventListener('change', connectRouting);
+    $('#voc_wet')?.addEventListener('input',   ()=> { if (wet)  wet.gain.value  = parseFloat($('#voc_wet').value||'0'); });
+    $('#voc_out')?.addEventListener('input',   ()=> { if (out)  out.gain.value  = parseFloat($('#voc_out').value||'1'); });
+    $('#voc_noise')?.addEventListener('input', ()=> { if (noiseGain) noiseGain.gain.value = parseFloat($('#voc_noise').value||'0'); });
+
+    ['voc_bands','voc_lo','voc_hi','voc_att','voc_rel'].forEach(id=>{
+      $(id)?.addEventListener('input', ()=>{ readCfg(); rebuildBands(); connectRouting(); });
+    });
+    $('#voc_rebuild')?.addEventListener('click', ()=>{
+      readCfg(); rebuildBands(); connectRouting();
+      const s=$('#voc_status'); if(s){ s.textContent='Bands rebuilt'; setTimeout(()=>s.textContent='',1000); }
+    });
+  }
+
+  // Install listeners immediately; the nodes are created after Start Audio
+  bindUI();
+})();
+</script>
 
 
 
@@ -1780,7 +1998,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   function tr(){ return +($('seq_trans')?.value||0); }
 
   function renderHighlights(currentIdx, playing){
-    window.ensureStrip && window.ensureStrip(); const sEl=$('seqStepsStrip');
+    ensureStrip(); const sEl=$('seqStepsStrip');
     if(sEl){
       const L=len(); const nodes=$$('.led', sEl);
       nodes.forEach((n,i)=>{
@@ -1855,14 +2073,17 @@ document.addEventListener('DOMContentLoaded',()=>{
     const pad = $('keypad'); if(!pad) return;
     if(pad.__seqHooked) return; pad.__seqHooked = true;
     pad.addEventListener('pointerdown', (e)=>{
-      
       const target = e.target.closest('.key'); if(!target) return;
-      // INPUT mode: let routeNoteOn handle pattern assignment & auto-advance
       if(ON && !PLAY){
         e.preventDefault();
-        // visual feedback only
+        const midi = parseFloat(target.dataset.midi);
+        const L = len();
+        const s = step % L;
+        let set = pattern.get(s); if(!set){ set=new Set(); pattern.set(s,set); }
+        if(set.has(midi)) set.delete(midi); else set.add(midi);
         target.classList.add('on'); setTimeout(()=>target.classList.remove('on'), 80);
-        return;
+        step = (s+1) % L;
+        renderHighlights(step, false);
       }
     }, true);
   }
@@ -1870,7 +2091,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Click LED to jump step (when not playing)
   
 function attachStripClick(){
-  window.ensureStrip && window.ensureStrip();
+  ensureStrip();
   const sEl = $('seqStepsStrip');
   if(!sEl || sEl.__seqHooked) return;
   sEl.__seqHooked = true;
@@ -1927,8 +2148,6 @@ function attachStripClick(){
     renderHighlights(step, false);
   }, true);
 }
-  try{ window.ensureStrip = ensureStrip; }catch{}
-
 
 
 
@@ -1999,19 +2218,9 @@ function attachStripClick(){
     const el = $('seq_steps'); if(!el || el.__bound) return; el.__bound = true;
     el.addEventListener('input', ()=>{
       maxCols = Math.max(1, +el.value || 16);
-      window.ensureStrip && window.ensureStrip();
+      ensureStrip();
       renderHighlights(step % maxCols, PLAY);
-    
-// Initialize CSS vars for mobile grid using the current step count
-(function(){
-  const el = $('seq_steps'); const strip = $('seqStepsStrip');
-  if (!el || !strip) return;
-  const steps = Math.max(1, +el.value || 16);
-  const cols = steps <= 16 ? steps : Math.ceil(steps / 2);
-  const rowh = steps <= 16 ? 30 : 26;
-  strip.style.setProperty('--seq-cols', String(Math.max(1, cols)));
-  strip.style.setProperty('--seq-rowh', rowh + 'px');
-})();
+    updateSeqGridForSteps();
 });
   }
   function __rebindSeqUI(){ try{ bindStepsLive(); }catch(e){} }
@@ -2026,19 +2235,8 @@ function attachStripClick(){
     const el = $('seq_steps'); if(!el || el.__bound) return; el.__bound = true;
     el.addEventListener('input', ()=>{
       maxCols = Math.max(1, +el.value || 16);
-      window.ensureStrip && window.ensureStrip();
+      ensureStrip();
       renderHighlights(step % maxCols, PLAY);
-
-// Update CSS variables for mobile grid (2 rows if >16 steps)
-const strip = $('seqStepsStrip');
-const steps = maxCols;
-const cols = steps <= 16 ? steps : Math.ceil(steps / 2);
-const rowh = steps <= 16 ? 30 : 26;
-if (strip && strip.style && typeof strip.style.setProperty === 'function'){
-  strip.style.setProperty('--seq-cols', String(Math.max(1, cols)));
-  strip.style.setProperty('--seq-rowh', rowh + 'px');
-}
-
     });
   })();
 
