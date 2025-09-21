@@ -1,8 +1,6 @@
 <!doctype html>
 <html lang="en">
-\1
-<script>try{if(typeof window.$!=='function'){window.$=(id)=>document.getElementById(id);}}catch(e){}</script>
-
+<head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>StagSynth — FINAL FX Fix</title>
@@ -132,16 +130,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 }
 </style>
 
-<style>@media (max-width: 540px){#seqStepsStrip{display:grid;grid-template-columns:repeat(var(--seq-cols,12),1fr);grid-auto-rows:34px;gap:8px;width:96vw;margin:10px auto 14px auto;touch-action:manipulation}#seqStepsStrip .led{min-height:34px;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}}</style>
-<style>
-  #customPanel .pill{ padding:6px 10px; border:1px solid #444; border-radius:10px; background:#202020; cursor:pointer }
-  #customPanel .pill:hover{ background:#272727 }
-  #wt_frames .thumb{ width:56px; height:40px; border:1px solid #333; border-radius:6px; background:#151515; position:relative; flex:0 0 auto }
-  #wt_frames .thumb canvas{ width:100%; height:100% }
-  #wt_frames .thumb.active{ outline:2px solid #88f }
-</style>
-
-</head>
+<style>@media (max-width: 540px){#seqStepsStrip{display:grid;grid-template-columns:repeat(var(--seq-cols,12),1fr);grid-auto-rows:34px;gap:8px;width:96vw;margin:10px auto 14px auto;touch-action:manipulation}#seqStepsStrip .led{min-height:34px;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}}</style></head>
 <body>
 <style>
   </style>
@@ -167,8 +156,7 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <button id="granularToggle" class="synth-btn" aria-expanded="false" aria-controls="granularPanel">Granular</button>
     <button id="samplerToggle" class="synth-btn" aria-expanded="false" aria-controls="samplerPanel">Sampler</button>
     <button id="vocoderToggle" class="synth-btn" aria-expanded="false" aria-controls="vocoderPanel">Vocoder</button>
-        <button id="customToggle" class="synth-btn" aria-expanded="false" aria-controls="customPanel">Custom/Wavetable</button>
-<div style="display:flex;gap:6px;align-items:center">
+    <div style="display:flex;gap:6px;align-items:center">
       <button id="recBtn" class="pill dim" title="Record short take (whole output)">
         <span id="recDot"></span> <span id="recLabel">Record</span>
       </button>
@@ -177,13 +165,12 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
   </div>
 </header>
 
-
 <!-- Synth panel -->
 <div id="synthPanel" class="synth-panel" role="region" aria-label="Synth controls">
   <div class="section">
     <h4>Oscillators</h4>
-    <label>Shape <select id="shape" data-midicc><optgroup label="Custom/Wavetables" data-custom="1"></optgroup><option>sawtooth</option><option>square</option><option>triangle</option><option>sine</option><option>noise</option></select></label>
-    <label>Sub Shape <select id="subShape" data-midicc><optgroup label="Custom/Wavetables" data-custom="1"></optgroup><option>off</option><option>sine</option><option>square</option><option>triangle</option><option>saw</option><option>noise</option></select></label>
+    <label>Shape <select id="shape" data-midicc><option>sawtooth</option><option>square</option><option>triangle</option><option>sine</option><option>noise</option></select></label>
+    <label>Sub Shape <select id="subShape" data-midicc><option>off</option><option>sine</option><option>square</option><option>triangle</option><option>saw</option><option>noise</option></select></label>
     <label>Detune (cents) <input type="range" id="detune" data-midicc min="-50" max="50" step="1" value="0"/></label>
     <label>Sub Detune (cents) <input type="range" id="subDetune" data-midicc min="-50" max="50" step="1" value="0"/></label>
     <label>Sub Level <input type="range" id="subLevel" data-midicc min="0" max="1" step="0.01" value="0.8"/></label>
@@ -619,10 +606,6 @@ function makeDriveCurve(amount=0){
 /* ===== Bitcrusher Worklet (inline) ===== */
 let bitcrusherNode=null, bitcrusherMix=null;
 async function initBitcrusherWorklet(ctx){
-  const isLocal = typeof location!=='undefined' && location.protocol==='file:';
-  const isSecure = (typeof isSecureContext!=='undefined' && isSecureContext) || (location && (location.protocol==='https:' || location.hostname==='localhost'));
-  if(!ctx.audioWorklet || isLocal || !isSecure){ ctx._bcRegistered=false; ctx._bcLoading=false; return; }
-
   if(ctx.audioWorklet && !ctx._bcRegistered && !ctx._bcLoading){
     ctx._bcLoading=true;
     const code = `
@@ -743,9 +726,10 @@ function makeSynth(a){
   bcIn.connect(bcDry).connect(bcSum);
   (async ()=>{
     await initBitcrusherWorklet(a);
-    let node=null; try{ if(a && a._bcRegistered){ node = new AudioWorkletNode(a,'bitcrusher-processor',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2]}); } }catch(e){ console.warn('[bitcrusher] node create failed', e && e.name); }bitcrusherNode = node;
+    const node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
+    bitcrusherNode = node;
     bitcrusherMix  = { dry: bcDry, wet: bcWet };
-    if(node){ bcIn.connect(node).connect(bcWet); }
+    bcIn.connect(node).connect(bcWet);
     bcWet.connect(bcSum);
   })();
 
@@ -912,7 +896,6 @@ function makeSynth(a){
 
   // ===== Voice helpers =====
   const shapeMap={saw:'sawtooth',sawtooth:'sawtooth',square:'square',triangle:'triangle',sine:'sine',noise:'noise',off:'off'};
-  const isCustomShape=(v)=>typeof v==='string' && v.startsWith('custom:');
   function noise(color){
     const buffer=a.createBuffer(1, a.sampleRate*2, a.sampleRate);
     const data=buffer.getChannelData(0);
@@ -970,11 +953,11 @@ function makeSynth(a){
       const g=a.createGain(); g.gain.value=1e-5; g.connect(coreFilter);
 
       // Main & sub osc
-      const mainType=isCustomShape(params.shape)?params.shape:(shapeMap[params.shape]||'sawtooth');
-      const subType =isCustomShape(params.subShape)?params.subShape:(shapeMap[params.subShape]||'off');
-      const main=(mainType==='noise')?[noise(params.noiseColor||'white')]:[ (window.oscFactory?window.oscFactory(a, freq*Math.pow(2,(params.detune||0)/1200), mainType, params) : osc(freq*Math.pow(2,(params.detune||0)/1200),mainType)) ];
+      const mainType=shapeMap[params.shape]||'sawtooth';
+      const subType =shapeMap[params.subShape]||'off';
+      const main=(mainType==='noise')?[noise(params.noiseColor||'white')]:[osc(freq*Math.pow(2,(params.detune||0)/1200),mainType)];
       const base=((params.subOctave||1)===0.5)?(freq/2):freq;
-      const sub =(subType==='off')?[]:(subType==='noise')?[noise(params.noiseColor||'white')]:[ (window.oscFactory?window.oscFactory(a, base*Math.pow(2,(params.subDetune||0)/1200), subType, params) : osc(base*Math.pow(2,(params.subDetune||0)/1200),subType)) ];
+      const sub =(subType==='off')?[]:(subType==='noise')?[noise(params.noiseColor||'white')]:[osc(base*Math.pow(2,(params.subDetune||0)/1200),subType)];
 
       const subG=a.createGain(); subG.gain.value=Math.max(0,Math.min(1,params.subLevel||0)); subG.connect(g);
       main.forEach(nd=>{ nd.connect(g); try{ nd.start() }catch{} });
@@ -1433,17 +1416,6 @@ function bindHeader(){
   const st=document.getElementById('synthToggle'), sp=document.getElementById('synthPanel'); st.onclick=()=>{ const o=sp.classList.toggle('open'); st.setAttribute('aria-expanded',o?'true':'false'); };
   const gt=document.getElementById('granularToggle'), gp=document.getElementById('granularPanel'); gt.onclick=()=>{ const o=gp.classList.toggle('open'); gt.setAttribute('aria-expanded',o?'true':'false'); };
   const sat=document.getElementById('samplerToggle'), sap=document.getElementById('samplerPanel'); sat.onclick=()=>{ const o=sap.classList.toggle('open'); sat.setAttribute('aria-expanded',o?'true':'false'); if(o){ ensureAudio().then(initSamplerBus);} };
-  
-const ct=document.getElementById('customToggle'), cp=document.getElementById('customPanel');
-if(ct && cp){
-  ct.onclick=()=>{
-    const o=cp.classList.toggle('open');
-    ct.setAttribute('aria-expanded', o?'true':'false');
-    if(o){
-      document.querySelectorAll('.synth-panel').forEach(p=>{ if(p!==cp) p.classList.remove('open'); });
-    }
-  };
-}
   const rec=document.getElementById('recBtn'); rec.onclick=()=>{ ensureAudio().then(()=>{ if(!mediaRecorder||mediaRecorder.state!=='recording') startTopRecording(); else stopTopRecording(); }); };
 
   const ml=document.getElementById('midiLearnBtn');
@@ -2014,7 +1986,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   function tr(){ return +($('seq_trans')?.value||0); }
 
   function renderHighlights(currentIdx, playing){
-    window.ensureStrip && window.ensureStrip(); const sEl=$('seqStepsStrip');
+    ensureStrip(); const sEl=$('seqStepsStrip');
     if(sEl){
       const L=len(); const nodes=$$('.led', sEl);
       nodes.forEach((n,i)=>{
@@ -2102,7 +2074,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Click LED to jump step (when not playing)
   
 function attachStripClick(){
-  window.ensureStrip && window.ensureStrip();
+  ensureStrip();
   const sEl = $('seqStepsStrip');
   if(!sEl || sEl.__seqHooked) return;
   sEl.__seqHooked = true;
@@ -2229,7 +2201,7 @@ function attachStripClick(){
     const el = $('seq_steps'); if(!el || el.__bound) return; el.__bound = true;
     el.addEventListener('input', ()=>{
       maxCols = Math.max(1, +el.value || 16);
-      window.ensureStrip && window.ensureStrip();
+      ensureStrip();
       renderHighlights(step % maxCols, PLAY);
     });
   }
@@ -2245,7 +2217,7 @@ function attachStripClick(){
     const el = $('seq_steps'); if(!el || el.__bound) return; el.__bound = true;
     el.addEventListener('input', ()=>{
       maxCols = Math.max(1, +el.value || 16);
-      window.ensureStrip && window.ensureStrip();
+      ensureStrip();
       renderHighlights(step % maxCols, PLAY);
     });
   })();
@@ -2304,351 +2276,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   updateSeqGridForSteps();
 }, {once:true});
 </script>
-
-<!-- Custom/Wavetable Panel -->
-<div id="customPanel" class="synth-panel" role="region" aria-label="Custom Waveforms">
-  <div class="section">
-    <h4>Custom / Wavetable Editor</h4>
-    <div class="row" style="gap:14px;flex-wrap:wrap">
-      <div style="flex:1;min-width:300px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <label>Tool
-            <select id="wt_tool">
-              <option value="draw" selected>Draw</option>
-              <option value="erase">Erase</option>
-              <option value="smooth">Smooth</option>
-              <option value="normalize">Normalize</option>
-              <option value="zero">Zero DC</option>
-              <option value="invert">Invert</option>
-            </select>
-          </label>
-          <label>Brush <input type="range" id="wt_brush" min="1" max="40" step="1" value="6"/></label>
-          <button id="wt_clear" class="pill">Clear</button>
-        </div>
-        <canvas id="wt_canvas" width="768" height="240" style="width:100%;border:1px solid #333;border-radius:8px;background:#111"<canvas id="wt_canvas" width="768" height="240" style="touch-action:none; width:100%;border:1px solid #333;border-radius:8px;background:#111"></canvas>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-          <button id="wt_add_frame" class="pill">Add as Frame</button>
-          <button id="wt_replace_frame" class="pill">Replace Current</button>
-          <button id="wt_delete_frame" class="pill">Delete Current</button>
-          <label> Morph
-            <select id="wt_morph">
-              <option value="none">None</option>
-              <option value="xfade" selected>Crossfade</option>
-            </select>
-          </label>
-          <label> Insert In-betweens
-            <input type="number" id="wt_inbet" min="0" max="256" step="1" value="0" style="width:64px"/>
-          </label>
-          <button id="wt_gen_morph" class="pill">Generate</button>
-        </div>
-      </div>
-
-      <div style="flex:1;min-width:280px">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-          <input type="file" id="wt_import_png" accept="image/png" />
-          <select id="wt_import_mode" title="Import mapping">
-            <option value="serum" selected>Serum-style (rows→frames)</option>
-            <option value="line">Line scan (trace waveform)</option>
-          </select>
-          <button id="wt_load_png" class="pill">Import PNG</button>
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;margin:8px 0">
-          \1 <label style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="wt_preview_chk"/> Preview</label>
-          <label>Frame <input id="wt_frame_idx" type="range" min="0" max="0" step="1" value="0" style="width:160px"/></label>
-          <span id="wt_frame_readout" class="badge">0/0</span>
-        </div>
-        <div id="wt_frames" style="display:flex;gap:6px;overflow:auto;padding:6px;border:1px dashed #333;border-radius:8px;min-height:60px"></div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
-          <input id="wt_name" placeholder="Wave name" style="flex:1"/>
-          <button id="wt_export" class="pill">Export to Synth</button>
-        </div>
-        <small>Exported waves appear under <em>Custom/Wavetables</em> in the Oscillator and Sub oscillator Shape menus.</small>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-<script>
-(()=>{
-  let __wtPreview = null;
-  async function __ensureAC(){
-    try{
-      if(window.ensureAudio) { await ensureAudio(); return window.audioCtx; }
-      return window.audioCtx || new (window.AudioContext||window.webkitAudioContext)();
-    }catch(e){ return null; }
-  }
-  function __buildPW(ac, frame){
-    const N = frame.length; const TWO_PI = Math.PI*2; const MAX_HARM = 128;
-    const real = new Float32Array(MAX_HARM+1), imag = new Float32Array(MAX_HARM+1);
-    for(let k=1;k<=MAX_HARM;k++){
-      let a=0,b=0;
-      for(let n=0;n<N;n++){ const phi=TWO_PI*k*n/N, x=frame[n]; a += x*Math.cos(phi); b += x*Math.sin(phi); }
-      real[k] = (2/N)*a; imag[k] = -(2/N)*b;
-    }
-    return ac.createPeriodicWave(real, imag, {disableNormalization:true});
-  }
-  async function __startPreview(getFrame){
-    const ac = await __ensureAC(); if(!ac) return;
-    const g = ac.createGain(); g.gain.value = 0.18; g.connect(ac.destination);
-    const o = ac.createOscillator();
-    const fr = getFrame(); if(fr){ try{ o.setPeriodicWave(__buildPW(ac, fr)); }catch{} }
-    o.connect(g);
-    try{ o.start(); }catch{}
-    __wtPreview = {ac,o,g,getFrame};
-  }
-  function __stopPreview(){
-    const P = __wtPreview; __wtPreview = null;
-    if(!P) return;
-    try{ P.o.stop(); }catch{} try{ P.o.disconnect(); }catch{} try{ P.g.disconnect(); }catch{}
-  }
-  function __updatePreview(){
-    const P = __wtPreview; if(!P) return;
-    const fr = P.getFrame(); if(!fr) return;
-    try{ P.o.setPeriodicWave(__buildPW(P.ac, fr)); }catch{}
-  }
-  document.addEventListener('DOMContentLoaded', ()=>{
-    const chk = document.getElementById('wt_preview_chk');
-    const slider = document.getElementById('wt_frame_idx');
-    if(chk){
-      chk.addEventListener('change', ()=>{
-        if(chk.checked){
-          __startPreview(()=> (window.__WT_CURRENT_FRAME || null));
-        }else{
-          __stopPreview();
-        }
-      });
-    }
-    if(slider){
-      slider.addEventListener('input', ()=>{ __updatePreview(); });
-    }
-  }, {once:true});
-})();
-</script>
-
-
-<script>
-(function(){
-  try{
-    const cvs = document.getElementById('wt_canvas');
-    if(cvs && !cvs.__wtBound){
-      cvs.__wtBound = true;
-      cvs.style.touchAction = 'none';
-      cvs.addEventListener('pointerdown', function(e){
-        try{ cvs.setPointerCapture && cvs.setPointerCapture(e.pointerId); }catch(_){}
-      }, {passive:false});
-    }
-    const file = document.getElementById('wt_import_png');
-    const btn  = document.getElementById('wt_load_png');
-    const modeSel = document.getElementById('wt_import_mode');
-    window.__WT_loadBitmap = async function(file){
-      if (window.createImageBitmap){
-        try{ return await createImageBitmap(file); }catch(e){}
-      }
-      return await new Promise((resolve, reject)=>{
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = ()=>{ resolve(img); URL.revokeObjectURL(url); };
-        img.onerror = (err)=>{ reject(err); URL.revokeObjectURL(url); };
-        img.src = url;
-      });
-    };
-    function triggerImport(){
-      const f = file && file.files && file.files[0];
-      if(!f) return;
-      try{
-        if (typeof importPNG === 'function'){
-          importPNG(f, modeSel && modeSel.value || 'serum');
-        } else if (window.__WT_EDITOR_IMPORT){
-          window.__WT_EDITOR_IMPORT(f, modeSel && modeSel.value || 'serum');
-        }
-      }catch(e){ console.warn('[WT] import failed', e); }
-    }
-    if(file && !file.__wtBound){
-      file.__wtBound = true;
-      file.addEventListener('change', triggerImport);
-    }
-    if(btn && !btn.__wtBound){
-      btn.__wtBound = true;
-      btn.addEventListener('click', triggerImport);
-    }
-  }catch(e){ console.warn('[WT] enhancement setup error', e); }
-})();
-</script>
-
-
-<script>
-// ===== Custom / Wavetable Editor (injected) =====
-(function(){
-  const TWO_PI = Math.PI*2;
-  const N = 2048;
-  const MAX_HARM = 128;
-  const LIB_KEY = 'stagsynth_customwaves_v1';
-  let LIB = { };
-  try{ LIB = JSON.parse(localStorage.getItem(LIB_KEY)||'{}'); }catch{ LIB={}; }
-
-  // UI refs
-  const cvs = document.getElementById('wt_canvas');
-  const ctx = cvs ? cvs.getContext('2d', { desynchronized:true }) : null;
-  const toolSel = document.getElementById('wt_tool');
-  const brushR = document.getElementById('wt_brush');
-  const clearB = document.getElementById('wt_clear');
-  const addB = document.getElementById('wt_add_frame');
-  const repB = document.getElementById('wt_replace_frame');
-  const delB = document.getElementById('wt_delete_frame');
-  const morphSel = document.getElementById('wt_morph');
-  const inbetN = document.getElementById('wt_inbet');
-  const framesDiv = document.getElementById('wt_frames');
-  const frameSlider = document.getElementById('wt_frame_idx');
-  const frameReadout = document.getElementById('wt_frame_readout');
-  const nameF = document.getElementById('wt_name');
-  const exportB = document.getElementById('wt_export');
-  const auditionB = document.getElementById('wt_audition');
-
-  if(!cvs || !ctx) return;
-
-  let tool = toolSel ? toolSel.value : 'draw';
-  let brush = brushR ? parseInt(brushR.value||'6',10) : 6;
-  let drawing = false;
-  let current = new Float32Array(N);
-  let frames = [];
-  let frameIdx = 0;
-
-  function saveLib(){ try{ localStorage.setItem(LIB_KEY, JSON.stringify(LIB)); }catch(e){} }
-  function zeroDC(arr){ let s=0; for(const v of arr) s+=v; const dc=s/arr.length; for(let i=0;i<arr.length;i++) arr[i]-=dc; }
-  function normalize(arr){ let m=1e-12; for(const v of arr) m=Math.max(m,Math.abs(v)); if(m>0) for(let i=0;i<arr.length;i++) arr[i]/=m; }
-  function smoothOne(arr, passes=1){ for(let p=0;p<passes;p++){ for(let i=1;i<arr.length-1;i++) arr[i]=(arr[i-1]+arr[i]+arr[i+1])/3; } }
-
-  function drawGrid(){
-    ctx.clearRect(0,0,cvs.width,cvs.height);
-    ctx.fillStyle='#111'; ctx.fillRect(0,0,cvs.width,cvs.height);
-    // midline
-    ctx.strokeStyle='#333'; ctx.beginPath();
-    ctx.moveTo(0, cvs.height/2); ctx.lineTo(cvs.width, cvs.height/2); ctx.stroke();
-    // waveform
-    ctx.strokeStyle='#7cf'; ctx.lineWidth=2; ctx.beginPath();
-    for(let i=0;i<N;i++){ const x=i*(cvs.width/(N-1)); const y=(0.5-current[i]*0.5)*cvs.height; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);}
-    ctx.stroke();
-    window.__WT_CURRENT_FRAME = current;
-  }
-
-  function toIndex(x){ return Math.max(0, Math.min(N-1, Math.round(x*(N-1)/cvs.clientWidth))); }
-  function yToVal(y){ const rel=y/cvs.clientHeight; return (0.5-rel)*2; }
-
-  function handleDraw(e){
-    const r=cvs.getBoundingClientRect();
-    const cx = (e.clientX!=null? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX)) || 0;
-    const cy = (e.clientY!=null? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY)) || 0;
-    const x=cx - r.left, y=cy - r.top;
-    const i=toIndex(x), val=yToVal(y);
-    const half=Math.max(1, Math.floor(brush/2));
-    for(let k=-half;k<=half;k++){ const idx=Math.max(0,Math.min(N-1,i+k)); if(tool==='draw') current[idx]=val; else if(tool==='erase') current[idx]=0; }
-    if(tool==='smooth') smoothOne(current,1);
-    if(tool==='normalize') normalize(current);
-    if(tool==='zero') zeroDC(current);
-    if(tool==='invert'){ for(let j=0;j<N;j++) current[j]=-current[j]; tool='draw'; if(toolSel) toolSel.value='draw'; }
-    drawGrid();
-  }
-
-  cvs.style.touchAction='none';
-  cvs.onpointerdown = (e)=>{ drawing=true; try{ cvs.setPointerCapture(e.pointerId); }catch{} handleDraw(e); };
-  cvs.onpointermove = (e)=>{ if(drawing) handleDraw(e); };
-  cvs.onpointerup = ()=>{ drawing=false; };
-  cvs.onpointerleave = ()=>{ drawing=false; };
-
-  if(toolSel) toolSel.onchange = ()=> tool = toolSel.value;
-  if(brushR) brushR.oninput = ()=> brush = parseInt(brushR.value,10);
-  if(clearB) clearB.onclick = ()=>{ current.fill(0); drawGrid(); };
-
-  function updateFrameReadout(){ frameReadout && (frameReadout.textContent = frames.length ? (frameIdx+1)+'/'+frames.length : '0/0'); }
-  function refreshThumbs(){
-    if(!framesDiv) return;
-    framesDiv.innerHTML='';
-    frames.forEach((fr, idx)=>{
-      const d=document.createElement('div'); d.className='thumb'+(idx===frameIdx?' active':'');
-      const c=document.createElement('canvas'); c.width=56; c.height=40; d.appendChild(c);
-      const cx=c.getContext('2d');
-      cx.fillStyle='#151515'; cx.fillRect(0,0,56,40);
-      cx.strokeStyle='#6f8'; cx.lineWidth=1; cx.beginPath();
-      for(let i=0;i<N;i++){ const x=i*(56/(N-1)); const y=(0.5-fr[i]*0.5)*40; if(i===0) cx.moveTo(x,y); else cx.lineTo(x,y);}
-      cx.stroke();
-      d.onclick=()=>{ frameIdx=idx; current.set(frames[frameIdx]); drawGrid(); if(frameSlider) frameSlider.value=String(frameIdx); updateFrameReadout(); refreshThumbs(); };
-      framesDiv.appendChild(d);
-    });
-    if(frameSlider){ frameSlider.max = Math.max(0, frames.length-1); frameSlider.value = Math.max(0, Math.min(frames.length-1, frameIdx)); }
-    updateFrameReadout();
-  }
-
-  if(frameSlider) frameSlider.oninput=()=>{ frameIdx = Math.max(0, Math.min(frames.length-1, parseInt(frameSlider.value||'0'))); if(frames[frameIdx]) current.set(frames[frameIdx]); drawGrid(); };
-
-  if(addB) addB.onclick = ()=>{ const fr=new Float32Array(current); zeroDC(fr); normalize(fr); frames.push(fr); frameIdx=frames.length-1; refreshThumbs(); };
-  if(repB) repB.onclick = ()=>{ if(!frames.length) return; const fr=new Float32Array(current); zeroDC(fr); normalize(fr); frames[frameIdx]=fr; refreshThumbs(); };
-  if(delB) delB.onclick = ()=>{ if(!frames.length) return; frames.splice(frameIdx,1); frameIdx=Math.max(0,frameIdx-1); if(frames[frameIdx]) current.set(frames[frameIdx]); drawGrid(); refreshThumbs(); };
-
-  if(morphSel && inbetN){
-    const genB = document.getElementById('wt_gen_morph');
-    if(genB) genB.onclick = ()=>{ if(frames.length<2) return; const out=[]; for(let i=0;i<frames.length-1;i++){ const a=frames[i], b=frames[i+1]; out.push(a); const steps=Math.max(0, Math.min(256, parseInt(inbetN.value||'0'))); for(let s=1;s<=steps;s++){ const t=s/(steps+1); const fr=new Float32Array(N); for(let k=0;k<N;k++) fr[k]=a[k]*(1-t)+b[k]*t; zeroDC(fr); normalize(fr); out.push(fr); } } out.push(frames[frames.length-1]); frames=out; frameIdx=0; current.set(frames[0]); drawGrid(); refreshThumbs(); };
-  }
-
-  async function loadBitmap(file){
-    if(window.createImageBitmap){ try{ return await createImageBitmap(file); }catch(e){} }
-    return await new Promise((resolve,reject)=>{ const url=URL.createObjectURL(file); const img=new Image(); img.onload=()=>{ resolve(img); URL.revokeObjectURL(url); }; img.onerror=(err)=>{ reject(err); URL.revokeObjectURL(url); }; img.src=url; });
-  }
-
-  async function importPNG(file, mode){
-    const bmp = await loadBitmap(file);
-    const tmp = document.createElement('canvas');
-    tmp.width = bmp.width; tmp.height = bmp.height;
-    const cx = tmp.getContext('2d'); cx.drawImage(bmp,0,0);
-    const data = cx.getImageData(0,0,tmp.width,tmp.height).data;
-
-    if(mode==='serum'){ // rows => frames
-      const rows = tmp.height, cols = tmp.width;
-      const resCols = N;
-      const out=[];
-      for(let r=0;r<rows;r++){ const fr=new Float32Array(N); for(let k=0;k<resCols;k++){ const sx=Math.floor(k*(cols/resCols)); const idx=(r*cols+sx)*4; const gray=(data[idx]+data[idx+1]+data[idx+2])/3; fr[k] = (gray/255)*2-1; } zeroDC(fr); normalize(fr); out.push(fr); }
-      frames = out; frameIdx=0; if(frames[0]) current.set(frames[0]); drawGrid(); refreshThumbs();
-    } else { // line-scan: darkest path per column
-      const cols=tmp.width, rows=tmp.height, resCols=N;
-      const arr=new Float32Array(N);
-      for(let k=0;k<resCols;k++){ const sx=Math.floor(k*(cols/resCols)); let bestY=0, best=1e9; for(let y=0;y<rows;y++){ const idx=(y*cols+sx)*4; const gray=(data[idx]+data[idx+1]+data[idx+2])/3; if(gray<best){ best=gray; bestY=y; } } arr[k] = (((rows-1-bestY)/(rows-1))*2)-1; }
-      zeroDC(arr); normalize(arr); current.set(arr); drawGrid();
-    }
-  }
-
-  if(auditionB) auditionB.onclick = ()=>{ try{ const ac=window.audioCtx || new (window.AudioContext||window.webkitAudioContext)(); const g=ac.createGain(); g.gain.value=0.2; g.connect(ac.destination); const o=ac.createOscillator(); const fr = frames[frameIdx] || current;
-    const real=new Float32Array(MAX_HARM+1), imag=new Float32Array(MAX_HARM+1);
-    for(let k=1;k<=MAX_HARM;k++){ let a=0,b=0; for(let n=0;n<N;n++){ const phi=TWO_PI*k*n/N, x=fr[n]; a+=x*Math.cos(phi); b+=x*Math.sin(phi); } real[k]=(2/N)*a; imag[k]=-(2/N)*b; }
-    const pw = ac.createPeriodicWave(real, imag, {disableNormalization:true});
-    o.setPeriodicWave(pw); o.connect(g); o.start(); setTimeout(()=>{ try{o.stop()}catch{} }, 400);
-  }catch(e){ console.warn(e); } };
-
-  // Export and menu refresh
-  function refreshMenus(){
-    const groupLabel='Custom/Wavetables';
-    ['shape','subShape'].forEach(id=>{ const sel=document.getElementById(id); if(!sel) return; sel.querySelectorAll('optgroup[data-custom="1"]').forEach(g=>g.remove()); const og=document.createElement('optgroup'); og.setAttribute('data-custom','1'); og.label=groupLabel; Object.keys(LIB).sort().forEach(name=>{ const opt=document.createElement('option'); opt.value='custom:'+name; opt.textContent=name + (LIB[name].frames.length>1?' (WT)':''); og.appendChild(opt); }); sel.appendChild(og); });
-  }
-  if(exportB) exportB.onclick = ()=>{ const name=(nameF && nameF.value || 'CustomWave').trim(); if(!name) return; const list = frames.length?frames:[new Float32Array(current)]; const cooked=list.map(fr=>{ const arr=new Float32Array(fr); zeroDC(arr); normalize(arr); return arr; }); LIB[name]={frames:cooked, ts:Date.now()}; saveLib(); refreshMenus(); if(nameF) nameF.value=''; };
-
-  // Public helpers
-  window.CustomWaves = {
-    get(n){ return LIB[n]; },
-    names(){ return Object.keys(LIB); },
-    makePeriodicWave(ac, name, idx=0){ const item=LIB[name]; if(!item) return null; const fr=item.frames[Math.max(0, Math.min(item.frames.length-1, idx))]; if(!fr) return null;
-      const real=new Float32Array(MAX_HARM+1), imag=new Float32Array(MAX_HARM+1);
-      for(let k=1;k<=MAX_HARM;k++){ let a=0,b=0; for(let n=0;n<N;n++){ const phi=TWO_PI*k*n/N, x=fr[n]; a+=x*Math.cos(phi); b+=x*Math.sin(phi); } real[k]=(2/N)*a; imag[k]=-(2/N)*b; }
-      return ac.createPeriodicWave(real, imag, {disableNormalization:true});
-    }
-  };
-
-  // Initial draw and menu refresh
-  current.fill(0); drawGrid(); refreshMenus();
-
-  // expose import function to other helpers
-  window.__WT_EDITOR_IMPORT = importPNG;
-})();
-</script>
-
 </body>
 
 
