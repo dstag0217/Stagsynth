@@ -116,21 +116,8 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 <style>
 /* Sequencer mobile layout */
 @media (max-width: 540px){
-  #seqStepsStrip{
-    display:grid;
-    grid-template-columns: repeat(var(--seq-cols, 16), 1fr);
-    grid-auto-rows: var(--seq-rowh, 26px);
-    gap:6px;
-    width:96vw;
-    margin:10px auto 12px auto;
-    touch-action: manipulation;
-  }
-  #seqStepsStrip .led{
-    min-height: var(--seq-rowh, 26px);
-    border-radius:8px;
-    background:#1e1e1e;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.07);
-  }
+  #seqStepsStrip{ display:grid; grid-template-columns: repeat(var(--seq-cols,16), 1fr); grid-auto-rows: var(--seq-rowh, 32px); gap:8px; width:96vw; margin:10px auto 14px auto; touch-action: manipulation; }
+  #seqStepsStrip .led{ min-height:32px; border-radius:10px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
 }
 @media (min-width: 541px) and (max-width: 900px){
   #seqStepsStrip{
@@ -1553,102 +1540,6 @@ document.addEventListener('DOMContentLoaded', main);
 </script>
 
 
-<script>
-(function(){
-  let vocCtx={ inited:false, bands:[], modStream:null, modSrc:null, modPre:null, sibHP:null, sibGain:null, envLPs:[], carBPFs:[], modBPFs:[], vcaGains:[], wet:null, dry:null, out:null, sum:null, carIn:null, modGate:null, modGain:null, carrierSel:'off' };
-  function hzForBand(i,N,lo,hi,semi){ const f=lo*Math.pow(hi/lo,i/(N-1)); return f*Math.pow(2,(semi||0)/12); }
-
-  async function ensureMic(){
-    if(vocCtx.modSrc) return true;
-    if(vocCtx._micPromise) return await vocCtx._micPromise;
-    try{
-      vocCtx._micPromise = navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false}); vocCtx.modStream=ms; await ensureAudio(); const a=audioCtx; vocCtx.modSrc=a.createMediaStreamSource(ms);
-      try{ vocCtx._micPromise = Promise.resolve(true); }catch{};
-      vocCtx.modGain=a.createGain(); vocCtx.modGain.gain.value=parseFloat(document.getElementById('voc_mod_gain').value||1); vocCtx.modPre=a.createBiquadFilter(); vocCtx.modPre.type='highpass'; vocCtx.modPre.frequency.value=90; vocCtx.modGate=a.createDynamicsCompressor(); vocCtx.modGate.threshold.value=parseFloat(document.getElementById('voc_gate').value||-70); vocCtx.modGate.ratio.value=20; vocCtx.modGate.knee.value=0; vocCtx.modGate.attack.value=0.005; vocCtx.modGate.release.value=0.25; vocCtx.modSrc.connect(vocCtx.modGain).connect(vocCtx.modPre).connect(vocCtx.modGate); return true; }catch(e){ const s=document.getElementById('voc_status'); if(s) s.textContent='Mic permission denied'; try{ vocCtx._micPromise = Promise.resolve(false); }catch{}; return false; } }
-
-  function destroyBands(){ vocCtx.bands.forEach(b=>{ try{ b.modBPF.disconnect(); b.carBPF.disconnect(); b.envRect?.disconnect(); b.envLP.disconnect(); b.vca.disconnect(); }catch{} }); vocCtx.bands=[]; try{ vocCtx.sum?.disconnect(); }catch{} }
-
-  function rebuildVocoder(){ if(!window.audioCtx) return; const a=audioCtx; destroyBands(); if(!vocCtx.wet){ vocCtx.wet=a.createGain(); } if(!vocCtx.dry){ vocCtx.dry=a.createGain(); } if(!vocCtx.out){ vocCtx.out=a.createGain(); } if(!vocCtx.sum){ vocCtx.sum=a.createGain(); vocCtx.sum.gain.value=1; }
-    const N=parseInt(document.getElementById('voc_bands').value||12,10), lo=parseFloat(document.getElementById('voc_lo').value||200), hi=parseFloat(document.getElementById('voc_hi').value||5000), Q=parseFloat(document.getElementById('voc_q').value||2.0), sh=parseFloat(document.getElementById('voc_shift').value||0), att=Math.max(0.0005,(parseFloat(document.getElementById('voc_att').value||12))/1000), rel=Math.max(0.005,(parseFloat(document.getElementById('voc_rel').value||160))/1000);
-    (()=>{ const v=parseFloat(document.getElementById('voc_mix').value); const m=(isFinite(v)?v:0.6); vocCtx.wet.gain.value=m; vocCtx.dry.gain.value=1-m; })(); vocCtx.dry.gain.value=1-vocCtx.wet.gain.value; vocCtx.out.gain.value=parseFloat(document.getElementById('voc_out').value||1);
-    if(!vocCtx.sibHP){ vocCtx.sibHP=a.createBiquadFilter(); vocCtx.sibHP.type='highpass'; vocCtx.sibHP.frequency.value=5000; } if(!vocCtx.sibGain){ vocCtx.sibGain=a.createGain(); } vocCtx.sibGain.gain.value=parseFloat(document.getElementById('voc_sib').value||0.15);
-    for(let i=0;i<N;i++){ const fc=hzForBand(i,N,lo,hi,sh); const modBPF=a.createBiquadFilter(); modBPF.type='bandpass'; modBPF.Q.value=Q; modBPF.frequency.value=fc; const carBPF=a.createBiquadFilter(); carBPF.type='bandpass'; carBPF.Q.value=Q; carBPF.frequency.value=fc; const rect=a.createWaveShaper(); const n=2048,curve=new Float32Array(n); for(let j=0;j<n;j++){ const x=j/(n-1)*2-1; curve[j]=Math.abs(x);} rect.curve=curve; rect.oversample='2x'; const envLP=a.createBiquadFilter(); envLP.type='lowpass'; envLP.frequency.value=1/(2*Math.PI*att)*0.25; const vca=a.createGain(); vca.gain.value=0; vocCtx.modGate.connect(modBPF).connect(rect).connect(envLP); envLP.connect(vca.gain); vocCtx.carIn.connect(carBPF).connect(vca).connect(vocCtx.sum); vocCtx.bands.push({modBPF,carBPF,envRect:rect,envLP,vca}); }
-    vocCtx.modGate.connect(vocCtx.sibHP).connect(vocCtx.sibGain).connect(vocCtx.sum);
-    try{ vocCtx.wet.disconnect(); vocCtx.dry.disconnect(); vocCtx.out.disconnect(); }catch{}
-// Wet: sum of vocal-modulated bands (+sibilance) → wet gain
-try{ vocCtx.sum.disconnect(); }catch{}
-vocCtx.sum.connect(vocCtx.wet);
-// Dry: direct carrier passthrough for intelligibility and Wet/Dry blending
-try{ vocCtx.carIn && vocCtx.carIn.disconnect(vocCtx.dry); }catch{}
-if (vocCtx.carIn) vocCtx.carIn.connect(vocCtx.dry);
-// Mixdown to out → master mixNode
-try{ vocCtx.wet.disconnect(vocCtx.out); }catch{}
-try{ vocCtx.dry.disconnect(vocCtx.out); }catch{}
-vocCtx.wet.connect(vocCtx.out);
-vocCtx.dry.connect(vocCtx.out);
-try{ vocCtx.out.disconnect(); }catch{}
-vocCtx.out.connect(mixNode);
-
-  }
-
-  function waitForSynthBusAndWire(maxMs=4000){
-    const t0=performance.now();
-    (function tick(){
-      const bus=window._stagsynth_synthBus;
-      if(bus && vocCtx?.carIn){ try{ vocCtx.carIn.disconnect(); }catch{} bus.connect(vocCtx.carIn); console.log('[voc] carrier wired to synthBus'); return; }
-      if(performance.now()-t0<maxMs) requestAnimationFrame(tick);
-    })();
-  }
-
-  function setCarrier(sel){
-    vocCtx.carrierSel=sel; if(!window.audioCtx) return;
-    if(!vocCtx.carIn){ vocCtx.carIn=audioCtx.createGain(); vocCtx.carIn.gain.value=1; }
-    try{ vocCtx.carIn.disconnect(); }catch{}
-    const synthBus=window._stagsynth_synthBus;
-    const samOut=(typeof samplerBus==='object' && samplerBus.out) ? samplerBus.out : null;
-    if(sel==='synth'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); }
-    else if(sel==='sampler'){ if(samOut) samOut.connect(vocCtx.carIn); }
-    else if(sel==='both'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); if(samOut) samOut.connect(vocCtx.carIn); }
-  }
-
-  async function enableVocoderIfNeeded(){
-    const sel=document.getElementById('voc_carrier').value;
-    const needOn=(sel!=='off'); if(!needOn) return;
-    await ensureAudio(); const ok=await ensureMic(); if(!ok) return;
-    if(!vocCtx.inited){ vocCtx.inited=true; }
-    setCarrier(sel); rebuildVocoder();
-    const s=document.getElementById('voc_status'); if(s) s.textContent='Vocoder ready';
-  }
-
-  // Bind UI
-  document.addEventListener('DOMContentLoaded',()=>{
-    const btn=document.getElementById('vocoderToggle');
-    const panel=document.getElementById('vocoderPanel');
-    if(btn && panel){
-      btn.onclick=()=>{ const o=panel.classList.toggle('open'); btn.setAttribute('aria-expanded', o?'true':'false'); if(o) enableVocoderIfNeeded(); };
-    }
-    const id=s=>document.getElementById(s);
-    id('voc_carrier')?.addEventListener('change', async ()=>{ await enableVocoderIfNeeded(); setCarrier(document.getElementById('voc_carrier').value); });
-    ['voc_bands','voc_lo','voc_hi','voc_q','voc_shift','voc_att','voc_rel','voc_sib'].forEach(k=> id(k)?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off'){ rebuildVocoder(); }}));
-    id('voc_mix')?.addEventListener('input', ()=>{ const mix=parseFloat(id('voc_mix').value||0); if(vocCtx.wet) vocCtx.wet.gain.value=mix; if(vocCtx.dry) vocCtx.dry.gain.value=1-mix; });
-    id('voc_out')?.addEventListener('input', ()=>{ if(vocCtx.out) vocCtx.out.gain.value=parseFloat(id('voc_out').value||1);
-id('voc_mod_gain')?.addEventListener('input', ()=>{
-  const v = parseFloat(id('voc_mod_gain').value||1);
-  if(vocCtx.modGain) vocCtx.modGain.gain.value = v;
-});
-id('voc_gate')?.addEventListener('input', ()=>{
-  const thr = parseFloat(id('voc_gate').value||-70);
-  if(vocCtx.modGate) vocCtx.modGate.threshold.value = thr;
-});
- });
-    id('voc_mod_gain')?.addEventListener('input', ()=>{ if(vocCtx.modGain) vocCtx.modGain.gain.value=parseFloat(id('voc_mod_gain').value||1); });
-    id('voc_gate')?.addEventListener('input', ()=>{ if(vocCtx.modGate) vocCtx.modGate.threshold.value=parseFloat(id('voc_gate').value||-70); });
-    id('voc_att')?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off') rebuildVocoder(); });
-    id('voc_rel')?.addEventListener('input', ()=>{ if(vocCtx.carrierSel!=='off') rebuildVocoder(); });
-    id('voc_test')?.addEventListener('click', async ()=>{ const ok=await ensureMic(); const s=id('voc_status'); if(s) s.textContent= ok ? 'Mic OK' : 'Mic blocked'; });
-  });
-})();
-</script>
 
 
 
@@ -1659,6 +1550,11 @@ id('voc_gate')?.addEventListener('input', ()=>{
   function hzForBand(i,N,lo,hi,semi){ const f=lo*Math.pow(hi/lo,i/(N-1)); return f*Math.pow(2,(semi||0)/12); }
 
   async function ensureMic(){
+    if(!((typeof isSecureContext!=='undefined' && isSecureContext) || (location && (location.protocol==='https:' || location.hostname==='localhost')))){
+      const s=document.getElementById('voc_status'); if(s) s.textContent='Mic needs HTTPS or localhost';
+      return false;
+    }
+    
     if(vocCtx.modSrc) return true;
     if(vocCtx._micPromise) return await vocCtx._micPromise;
     try{
@@ -1676,7 +1572,7 @@ id('voc_gate')?.addEventListener('input', ()=>{
       vocCtx.modSrc.connect(vocCtx.modGain).connect(vocCtx.modPre).connect(vocCtx.modGate);
       return true;
     }catch(e){
-      const s=document.getElementById('voc_status'); if(s) s.textContent='Mic permission denied'; try{ vocCtx._micPromise = Promise.resolve(false); }catch{}; return false;
+      const s=document.getElementById('voc_status'); if(s) s.textContent='Mic permission denied (browser)'; try{ vocCtx._micPromise = Promise.resolve(false); }catch{}; return false;
     }
   }
 
@@ -1959,17 +1855,14 @@ document.addEventListener('DOMContentLoaded',()=>{
     const pad = $('keypad'); if(!pad) return;
     if(pad.__seqHooked) return; pad.__seqHooked = true;
     pad.addEventListener('pointerdown', (e)=>{
+      
       const target = e.target.closest('.key'); if(!target) return;
+      // INPUT mode: let routeNoteOn handle pattern assignment & auto-advance
       if(ON && !PLAY){
         e.preventDefault();
-        const midi = parseFloat(target.dataset.midi);
-        const L = len();
-        const s = step % L;
-        let set = pattern.get(s); if(!set){ set=new Set(); pattern.set(s,set); }
-        if(set.has(midi)) set.delete(midi); else set.add(midi);
+        // visual feedback only
         target.classList.add('on'); setTimeout(()=>target.classList.remove('on'), 80);
-        step = (s+1) % L;
-        renderHighlights(step, false);
+        return;
       }
     }, true);
   }
