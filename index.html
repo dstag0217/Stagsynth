@@ -199,6 +199,21 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
   </div>
 
   <!-- ===== FULL FX SUITE (all neutral on load) ===== -->
+  
+  <!-- ===== Layout (Rows / Columns) ===== -->
+  <div class="section" id="layoutControls">
+    <h4>Layout</h4>
+    <label>Columns
+      <input type="range" id="ui_gridCols" min="1" max="16" step="1" value="4" aria-label="Columns"/>
+      <span id="ui_gridCols_val" class="readout" aria-hidden="true">4</span>
+    </label>
+    <label>Rows
+      <input type="range" id="ui_gridRows" min="1" max="16" step="1" value="4" aria-label="Rows"/>
+      <span id="ui_gridRows_val" class="readout" aria-hidden="true">4</span>
+    </label>
+  </div>
+
+
   <div class="section" id="fxSuite">
     
 <div class="section" id="seqControlsInline" style="display:none">
@@ -2305,70 +2320,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 </script>
 
 <!-- Custom/Wavetable Panel -->
-<div id="customPanel" class="synth-panel" role="region" aria-label="Custom Waveforms">
-  <div class="section">
-    <h4>Custom / Wavetable Editor</h4>
-    <div class="row" style="gap:14px;flex-wrap:wrap">
-      <div style="flex:1;min-width:300px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <label>Tool
-            <select id="wt_tool">
-              <option value="draw" selected>Draw</option>
-              <option value="erase">Erase</option>
-              <option value="smooth">Smooth</option>
-              <option value="normalize">Normalize</option>
-              <option value="zero">Zero DC</option>
-              <option value="invert">Invert</option>
-            </select>
-          </label>
-          <label>Brush <input type="range" id="wt_brush" min="1" max="40" step="1" value="6"/></label>
-          <button id="wt_clear" class="pill">Clear</button>
-        </div>
-        <canvas id="wt_canvas" width="768" height="240" style="width:100%;border:1px solid #333;border-radius:8px;background:#111"<canvas id="wt_canvas" width="768" height="240" style="touch-action:none; width:100%;border:1px solid #333;border-radius:8px;background:#111"></canvas>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-          <button id="wt_add_frame" class="pill">Add as Frame</button>
-          <button id="wt_replace_frame" class="pill">Replace Current</button>
-          <button id="wt_delete_frame" class="pill">Delete Current</button>
-          <label> Insert In-betweens
-            <input type="number" id="wt_inbet" min="0" max="256" step="1" value="0" style="width:64px"/>
-          </label>
-          <label style="display:block;margin-top:6px"> Morph
-            <select id="wt_morph">
-              <option value="none">None</option>
-              <option value="xfade" selected>Crossfade</option>
-            </select>
-          </label></div>
-      </div>
-
-      <div style="flex:1;min-width:280px">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-          <input type="file" id="wt_import_png" accept="image/png" />
-          <button id="wt_load_png" class="pill">Import PNG</button>
-        </div>
-
-<div id="wt_import_export_row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
-  <label style="display:inline-flex;align-items:center;gap:6px">Name
-    <input id="wt_import_name" type="text" placeholder="Imported WT" style="width:200px"/>
-  </label>
-  <button id="wt_import_export" class="pill">Export to Oscs</button>
-</div>
-
-
-<div style="display:flex;gap:8px;align-items:center;margin-top:10px">
-          <input id="wt_name" placeholder="Wave name" style="flex:1"/>
-          <button id="wt_export" class="pill">Export to Oscs</button>
-        </div>
-
-        <div style="display:flex;gap:10px;align-items:center;margin:8px 0">
-           <label>Frame <input id="wt_frame_idx" type="range" min="0" max="0" step="1" value="0" style="width:160px"/></label>
-          <span id="wt_frame_readout" class="badge">0/0</span>
-        </div>
-        <div id="wt_frames" style="display:flex;gap:6px;overflow:auto;padding:6px;border:1px dashed #333;border-radius:8px;min-height:60px"></div>
-        
-        </div>
-    </div>
-  </div>
-</div>
+>
 
 
 <script>
@@ -2836,7 +2788,21 @@ zeroDC(fr); normalize(fr); out.push(fr); }
 
   // ---- Utils ----
   const clamp=(v,min,max)=>v<min?min:v>max?max:v;
-  function dcRemove(arr){
+  
+  function sealEndpoints(arr){
+    const N = arr.length>>>0;
+    if(N<4) return arr;
+    // Make endpoints equal with a short raised-cosine crossfade over M samples
+    const M = Math.min(64, Math.max(8, (N/64)|0));
+    const delta = arr[0] - arr[N-1];
+    for(let i=0;i<M;i++){
+      const w = 0.5 - 0.5*Math.cos(Math.PI*(i+1)/M); // 0..1
+      arr[N-1-i] += delta * w;
+    }
+    arr[N-1] = arr[0];
+    return arr;
+  }
+function dcRemove(arr){
     let sum=0; for(let i=0;i<arr.length;i++) sum+=arr[i];
     const mean=sum/arr.length; const out=new Float32Array(arr.length);
     for(let i=0;i<arr.length;i++) out[i]=arr[i]-mean;
@@ -3016,6 +2982,7 @@ registerProcessor('${WORKLET_NAME}', MorphWTProcessor);`
       const d = dcRemove(a);
       const n = normalize(d);
       const res = (n.length===FRAME_SIZE)?n:resample1D(n, FRAME_SIZE);
+      sealEndpoints(res);
       return res;
     });
     if(frames.length>MAX_FRAMES) frames = frames.slice(0,MAX_FRAMES);
@@ -3894,23 +3861,58 @@ auditionB.addEventListener('click', async ()=>{
     const f0 = parseFloat(audFreq.value)||220;
 
     if(mode==='freerun' && (AUD_ABUF || (AUD_FULL && AUD_FULL.length>0))){
-      const src=ac.createBufferSource();
-      if(AUD_ABUF){ src.buffer=AUD_ABUF; } else { const ab=ac.createBuffer(1, AUD_FULL.length, Math.max(8000,Math.min(192000, AUD_SR||44100))); ab.copyToChannel(AUD_FULL,0); src.buffer=ab; }
-      const g=ac.createGain();
-      const L=Math.min(src.buffer.length, Math.floor(src.buffer.sampleRate*1.0)); const tmp=new Float32Array(L); src.buffer.copyFromChannel(tmp,0,0); const rms=computeRMS(tmp); const target=0.22; g.gain.setValueAtTime(Math.min(4,Math.max(0.05,target/Math.max(1e-6,rms))), ac.currentTime);
-      __audRefHz = 220; src.playbackRate.value = f0 / __audRefHz; pitchRefEl.textContent = `Free‑run reference: ${__audRefHz} Hz`;
-      src.connect(g).connect(ac.destination); __audSrc=src; __audGain=g; __audMode='freerun';
-      src.start(ac.currentTime+0.01);
-      const dur=Math.min(2.5, src.buffer.duration / Math.max(1e-6, src.playbackRate.value)); setTimeout(()=>{ stopAudition(); }, dur*1000+60);
-    }else{
-      const cyc=new Float32Array(editorBuf);
-      const xfade=48; for(let i=0;i<xfade;i++){ const a=cyc[N-xfade+i], b=cyc[i]; const t=i/(xfade-1); const wa=Math.cos(0.5*Math.PI*t), wb=Math.sin(0.5*Math.PI*t); const v=wa*a+wb*b; cyc[i]=v; cyc[N-xfade+i]=v; }
-      const o=ac.createOscillator(); o.setPeriodicWave(WT_fftToPeriodicWave(ac,cyc,f0)); o.frequency.value=f0;
-      const g=ac.createGain(); g.gain.value=0.18; o.connect(g).connect(ac.destination);
-      __audSrc=o; __audGain=g; __audMode='periodic';
-      o.start(); setTimeout(()=>{ stopAudition(); }, 1200);
-    }
-  }catch(e){ console.warn(e); }
+  const src=ac.createBufferSource();
+  if(AUD_ABUF){ src.buffer=AUD_ABUF; } else { const ab=ac.createBuffer(1, AUD_FULL.length, Math.max(8000,Math.min(192000, AUD_SR||44100))); ab.copyToChannel(AUD_FULL,0); src.buffer=ab; }
+  const g=ac.createGain();
+  const L=Math.min(src.buffer.length, Math.floor(src.buffer.sampleRate*0.02));
+  g.gain.setValueAtTime(0.0001, ac.currentTime);
+  const rms=computeRMS(src.buffer.getChannelData(0));
+  const target=0.22; g.gain.linearRampToValueAtTime(Math.min(0.9,Math.max(0.05,target/Math.max(1e-6,rms))), ac.currentTime);
+  __audRefHz = 220; src.playbackRate.value = f0 / __audRefHz; pitchRefEl.textContent = `Free‑run reference: ${__audRefHz} Hz`;
+  src.connect(g).connect(ac.destination); __audSrc=src; __audGain=g; __audMode='freerun';
+  src.start(ac.currentTime+0.01);
+  const dur=Math.min(2.5, src.buffer.duration / Math.max(1e-3, src.playbackRate.value)); setTimeout(()=>{ stopAudition(); }, dur*1000+60);
+}else{
+  // Exact 1‑cycle loop audition from the editor buffer
+  let cyc = new Float32Array(editorBuf);
+  // DC remove & normalize (peak)
+  cyc = dcRemove(cyc); normalize(cyc);
+  // Seam crossfade at ends for clickless loop
+  const xfade = 48;
+  for(let i=0;i<xfade;i++){
+    const t = i/xfade;
+    const a = cyc[cyc.length - xfade + i];
+    const b = cyc[i];
+    const wa = Math.cos(0.5*Math.PI*t);
+    const wb = Math.sin(0.5*Math.PI*t);
+    const v = wa*a + wb*b;
+    cyc[i] = v; cyc[cyc.length - xfade + i] = v;
+  }
+  // Build 1‑cycle buffer and loop
+  const ab = ac.createBuffer(1, cyc.length, ac.sampleRate);
+  ab.copyToChannel(cyc, 0);
+  const src = ac.createBufferSource();
+  src.buffer = ab;
+  src.loop = true;
+  src.loopStart = 0;
+  src.loopEnd = ab.duration;
+  // Reference frequency for one cycle at rate=1
+  const refHz = ac.sampleRate / cyc.length;
+  __audRefHz = refHz;
+  src.playbackRate.value = f0 / refHz;
+  pitchRefEl.textContent = `Cycle reference: ${refHz.toFixed(1)} Hz`;
+  // Gain with RMS‑based normalization
+  const g = ac.createGain();
+  const rms = computeRMS(cyc);
+  const target = 0.22;
+  g.gain.setValueAtTime(0.0001, ac.currentTime);
+  g.gain.linearRampToValueAtTime(Math.min(0.9, Math.max(0.05, target/Math.max(1e-6, rms))), ac.currentTime + 0.02);
+  src.connect(g).connect(ac.destination);
+  __audSrc = src; __audGain = g; __audMode = 'cycle';
+  src.start(ac.currentTime + 0.01);
+  setTimeout(()=>{ stopAudition(); }, 1200);
+}
+}catch(e){ console.warn(e); }
 });
 audFreq.addEventListener('input', ()=>{
   const f0 = parseFloat(audFreq.value)||220;
@@ -3921,7 +3923,7 @@ audFreq.addEventListener('input', ()=>{
     }else if(__audMode==='periodic' && __audSrc.frequency){
       __audSrc.frequency.setValueAtTime(f0, __audCtx.currentTime);
     }
-  }catch(e){}
+  else if(__audMode==='cycle' && __audSrc.playbackRate){ __audSrc.playbackRate.setValueAtTime(f0/(__audRefHz||220), __audCtx.currentTime); } }catch(e){}
 });
 
 /* ===== Export ===== */
@@ -3950,8 +3952,528 @@ refreshThumbs(); updateFrameLabel(); paintEditor();
 })(); // end IIFE
 </script>
 
+<script>
+// Bridge: route the top-bar Custom/Wavetable button to the new overlay
+(function(){
+  const toggle = document.getElementById('customToggle');
+  if (toggle) {
+    toggle.addEventListener('click', function(e){
+      e.preventDefault();
+      const fab = document.getElementById('wt_fab');
+      if (fab) { fab.click(); }
+    }, {capture:false, passive:false});
+  }
+})();
+</script>
+
+
+
+<script>
+// WT export → register into synth and refresh menus
+(function(){
+  window.addEventListener('wt:export', function(ev){
+    try{
+      const d = ev && ev.detail || {};
+      const name = (d.name || 'Custom WT').trim();
+      let frames = Array.isArray(d.frames) ? d.frames.map(f=>Float32Array.from(f)) : [];
+      if(!frames.length){ console.warn('[WT] export event missing frames'); return; }
+      if(window.CustomWT && typeof CustomWT.save==='function'){
+        CustomWT.save(name, frames);
+        // Update menus and preselect the new table on primary shape selector if present
+        try{ CustomWT.refreshMenus(name); }catch(e){}
+        try{
+          const sel = document.getElementById('shape');
+          if(sel){
+            const val = 'custom:' + name;
+            // ensure option exists (refreshMenus should have added it)
+            let opt = Array.from(sel.options).find(o=>o.value===val || o.textContent===name);
+            if(opt){ sel.value = opt.value; sel.dispatchEvent(new Event('change', {bubbles:true})); }
+          }
+        }catch(e){}
+        console.log('[WT] Registered wavetable:', name, frames.length, 'frames');
+      }else{
+        console.warn('[WT] CustomWT API not available; cannot register export');
+      }
+    }catch(err){ console.warn('[WT] export handler error', err); }
+  }, {passive:true});
+})();
+</script>
+
+<script>
+(function(){
+  // ==============================================
+  // 0) Local export cache (keeps frames available)
+  // ==============================================
+  window.__WT_LOCAL_LIB__ = window.__WT_LOCAL_LIB__ || new Map();
+  window.addEventListener('wt:export', function(ev){
+    try{
+      const d = ev && ev.detail || {};
+      if(d && d.name && Array.isArray(d.frames)){
+        const frames = d.frames.map(f=>Float32Array.from(f));
+        window.__WT_LOCAL_LIB__.set(d.name, frames);
+      }
+    }catch(e){ console.warn('[WT] local export cache failed', e); }
+  }, {passive:true});
+
+  // ==============================================
+  // 1) Accurate PeriodicWave fallback with pitch & gain calibration
+  //    Pitch center lowered by 3 octaves (× 1/8)
+  // ==============================================
+  const __WT_PITCH_MUL__ = 1; // 3 octaves down
+
+  function makeFreqProxy(param, mul){
+    // Wrap AudioParam-like interface so any engine updates are scaled
+    return {
+      get value(){ try{ return param.value / mul; }catch(_){ return 0; } },
+      set value(v){ try{ param.value = (v||0) * mul; }catch(_){ } },
+      setValueAtTime(v, t){ try{ param.setValueAtTime((v||0)*mul, t); }catch(_){ } },
+      linearRampToValueAtTime(v, t){ try{ param.linearRampToValueAtTime((v||0)*mul, t); }catch(_){ } },
+      exponentialRampToValueAtTime(v, t){ try{ param.exponentialRampToValueAtTime(Math.max(1e-6,(v||0)*mul), t); }catch(_){ } },
+      setTargetAtTime(v, t, c){ try{ param.setTargetAtTime((v||0)*mul, t, c); }catch(_){ } },
+      cancelScheduledValues(t){ try{ param.cancelScheduledValues(t); }catch(_){ } }
+    };
+  }
+
+  function makePeriodicProxy(ac, freq, frames){
+  const src = (frames && frames[0]) ? frames[0] : null;
+  if(!src){ return null; }
+  const N0 = src.length >>> 0;
+  // Copy, seam-seal (make first==last), and zero-center
+  const fr = new Float32Array(N0);
+  for(let i=0;i<N0;i++) fr[i] = src[i];
+  // Seam seal: linear ramp to make endpoints equal
+  const delta = fr[0] - fr[N0-1];
+  for(let i=0;i<N0;i++){ fr[i] -= delta * (i/(N0-1)); }
+  // Zero-center
+  let mean=0; for(let i=0;i<N0;i++) mean += fr[i]; mean /= (N0||1);
+  for(let i=0;i<N0;i++) fr[i] -= mean;
+
+  // Fundamental after 3-oct downscale
+  const f0 = Math.max(1e-3, (freq || 440) * __WT_PITCH_MUL__);
+  const nyq = ac.sampleRate * 0.5;
+  const maxKByFreq = Math.max(1, Math.floor((nyq * 0.70) / f0)); // conservative margin
+  const H = Math.min(96, Math.floor(N0/2), maxKByFreq);
+  const real = new Float32Array(H+1);
+  const imag = new Float32Array(H+1);
+
+  // Peak (for loudness calibration)
+  let peak = 0; for(let n=0;n<N0;n++){ const a = Math.abs(fr[n]); if(a>peak) peak=a; }
+
+  // Fourier coeffs (WebAudio convention)
+  for(let k=1;k<=H;k++){
+    let a=0, b=0;
+    for(let n=0;n<N0;n++){
+      const x = fr[n];
+      const phi = 2*Math.PI*k*n/N0;
+      a += x * Math.cos(phi);
+      b += x * Math.sin(phi);
+    }
+    real[k] = (2/N0) * a;
+    imag[k] = (2/N0) * b;
+  }
+
+  const osc = ac.createOscillator();
+  const pw  = ac.createPeriodicWave(real, imag, { disableNormalization: false });
+  osc.setPeriodicWave(pw);
+  osc.frequency.value = f0;
+
+  // Softer calibrated gain
+  const g = ac.createGain();
+  const targetPk = 0.7;
+  const scale = (peak && isFinite(peak)) ? (targetPk / peak) : 1.0;
+  g.gain.value = Math.max(0.1, Math.min(1.5, scale));
+
+  return {
+    __osc: osc,
+    __gain: g,
+    connect: (...a)=>{ osc.connect(g); return g.connect(...a); },
+    disconnect: (...a)=>{ try{ g.disconnect(...a) }catch(e){} try{ osc.disconnect() }catch(e){} },
+    start: (t)=>{ try{ osc.start(t) }catch(e){} },
+    stop:  (t)=>{ try{ osc.stop(t) }catch(e){} },
+    get frequency(){ return makeFreqProxy(osc.frequency, __WT_PITCH_MUL__); }
+  };
+}
+
+// Provide/override CustomWT.makeNode with accurate fallback
+  (function(){
+    window.CustomWT = window.CustomWT || {};
+    const prev = CustomWT.makeNode;
+    CustomWT.get = CustomWT.get || window.CustomWT.get;
+    CustomWT.makeNode = function(ac, freq, nameOrFrames){
+      // Prefer existing AudioWorklet engine when available
+      try{
+        const hasAW = !!(ac && ac.audioWorklet);
+        if(hasAW && typeof prev === 'function'){
+          return prev.call(this, ac, freq, nameOrFrames);
+        }
+      }catch(_){}
+
+      let frames = null;
+      if(Array.isArray(nameOrFrames)){
+        frames = nameOrFrames.map(f=>Float32Array.from(f));
+      }else{
+        try{ const rec = this.get ? this.get(nameOrFrames) : null; frames = rec && rec.frames && rec.frames.map(f=>Float32Array.from(f)); }catch(e){}
+        if((!frames || !frames.length) && window.__WT_LOCAL_LIB__){ try{ frames = window.__WT_LOCAL_LIB__.get(nameOrFrames); }catch(e){} }
+      }
+      const proxy = makePeriodicProxy(ac, freq||440, frames);
+      if(proxy) return proxy;
+      return prev ? prev.call(this, ac, freq, nameOrFrames) : null;
+    };
+  })();
+
+  // ==============================================
+  // 2) oscFactory wrapper → route custom:* properly
+  // ==============================================
+  (function(){
+    const prevFactory = window.oscFactory;
+    window.oscFactory = function(ac, freq, type, params){
+      try{
+        if(typeof type==='string' && type.startsWith('custom:') && window.CustomWT){
+          const nm = type.slice(7);
+          const node = CustomWT.makeNode(ac, freq||440, nm);
+          if(node) return node;
+        }
+      }catch(e){ console.warn('[oscFactory custom] error', e); }
+      return (typeof prevFactory==='function') ? prevFactory(ac, freq, type, params)
+            : (function(){ const o=ac.createOscillator(); o.type=(typeof type==='string'?type:'sine'); o.frequency.value=freq||440; return o; })();
+    };
+  })();
+
+  // ==============================================
+  // 3) UI: exactly one Position slider below each dropdown only when value is custom:*
+  // ==============================================
+  (function(){
+    function applyWidth(selectEl, blockEl){
+      if(!selectEl || !blockEl) return;
+      const slider = blockEl.querySelector('input[type="range"]');
+      if(!slider) return;
+      try{
+        const rect = selectEl.getBoundingClientRect();
+        const px = Math.max(140, Math.floor(rect.width));
+        slider.style.width = px + 'px';
+      }catch(_){}
+    }
+
+    function ensureBlock(selectId, channel){
+      const sel = document.getElementById(selectId);
+      if(!sel) return;
+      // Remove any previous inline wrappers we may have added
+      const toRemove = [];
+      let sib = sel.nextSibling;
+      while(sib){
+        const next = sib.nextSibling;
+        if(sib.nodeType===1 && (sib.classList.contains('wt-morph-wrap') || sib.classList.contains('wt-pos-inline'))){
+          toRemove.push(sib);
+        }
+        sib = next;
+      }
+      toRemove.forEach(x=>{ try{x.remove();}catch(_){ } });
+
+      // Create/find block under the dropdown
+      let block = sel.__wtPosBlock;
+      if(!block){
+        const next = sel.nextElementSibling;
+        if(next && next.classList && next.classList.contains('wt-pos-block')){
+          block = sel.__wtPosBlock = next;
+        }else{
+          block = document.createElement('div');
+          block.className = 'wt-pos-block';
+          block.style.cssText = 'display:none; margin:8px 0 6px 0; width:100%;';
+          const label = document.createElement('div'); label.textContent='Position'; label.style.cssText='font-size:0.9rem; opacity:.8; margin-bottom:4px;';
+          const slider = document.createElement('input'); slider.type='range'; slider.min='0'; slider.max='1'; slider.step='0.001'; slider.value='0'; slider.style.cssText='height:18px;';
+          slider.addEventListener('input', ()=>{
+            const v = parseFloat(slider.value)||0;
+            if(window.CustomWT){
+              if(typeof CustomWT.setMorphChannel==='function') CustomWT.setMorphChannel(channel, v);
+              else if(typeof CustomWT.setMorph==='function') CustomWT.setMorph(v);
+            }
+          }, {passive:true});
+          block.appendChild(label); block.appendChild(slider);
+          sel.insertAdjacentElement('afterend', block);
+          sel.__wtPosBlock = block;
+        }
+      }
+
+      function update(){
+        const isCustom = /^custom:/.test(sel.value||'');
+        block.style.display = isCustom ? 'block' : 'none';
+        if(isCustom){ window.__WT_CURRENT_CHANNEL = channel; applyWidth(sel, block); }
+      }
+
+      if(!sel.__wtPosBlockBound){
+        sel.addEventListener('change', update);
+        sel.addEventListener('input', update);
+        sel.__wtPosBlockBound = true;
+      }
+      update();
+    }
+
+    function updateAll(){
+      ensureBlock('shape','main');
+      ensureBlock('subShape','sub');
+    }
+
+    if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', updateAll); } else { updateAll(); }
+    setTimeout(updateAll, 150);
+    setTimeout(updateAll, 400);
+
+    // Watch for programmatic value changes
+    const obs = new MutationObserver(updateAll);
+    const s = document.getElementById('shape');
+    const sub = document.getElementById('subShape');
+    if(s) obs.observe(s, { attributes:true, attributeFilter:['value'] });
+    if(sub) obs.observe(sub, { attributes:true, attributeFilter:['value'] });
+
+    // Also respond after exports
+    window.addEventListener('wt:export', function(){ setTimeout(updateAll, 60); }, {passive:true});
+  })();
+})();
+</script>
+<style>
+/* Block slider row appearance; width is matched dynamically to the dropdown */
+.wt-pos-block input[type="range"]{ width:180px; height:18px; }
+</style>
+
 </body>
 
 
 
 </html>
+
+<!-- ==== WT PATCH 3: Cycle‑Locked WAV Import + AW path restore ==== -->
+<script>
+(function(){
+  'use strict';
+  // --- Small math utils ---
+  const clamp=(v,min,max)=>v<min?min:v>max?max:v;
+  function dcRemove(arr){
+    let sum=0; for(let i=0;i<arr.length;i++) sum+=arr[i];
+    const mean=sum/Math.max(1,arr.length);
+    const out=new Float32Array(arr.length);
+    for(let i=0;i<arr.length;i++) out[i]=arr[i]-mean;
+    return out;
+  }
+  function normalize(arr, target=0.95){
+    let peak=0; for(let i=0;i<arr.length;i++){ const a=Math.abs(arr[i]); if(a>peak) peak=a; }
+    if(peak<1e-12) return Float32Array.from(arr);
+    const g=target/peak;
+    const out=new Float32Array(arr.length);
+    for(let i=0;i<arr.length;i++) out[i]=Math.max(-1, Math.min(1, arr[i]*g));
+    return out;
+  }
+  function sealEndpointsCosine(arr, span=32){
+    const N=arr.length|0; if(N<8) return Float32Array.from(arr);
+    const out=new Float32Array(arr);
+    const d=out[0]-out[N-1];
+    const M=Math.min(span, Math.floor(N*0.02)||1);
+    for(let i=0;i<M;i++){
+      const w = 0.5 - 0.5*Math.cos(Math.PI*(i/(M-1||1)));
+      out[i]        -= d*w;
+      out[N-1-i]    += d*w;
+    }
+    out[N-1]=out[0];
+    return out;
+  }
+  // --- Autocorr fundamental (robust enough for steady tones) ---
+  function estimateFundPeriod(x, sr){
+    // Use center window; avoid attack/decay
+    const N = x.length|0;
+    if(N<4096) return null;
+    const win = Math.min(N, Math.max(8192, Math.min(32768, (sr*0.25)|0)));
+    const start = ((N - win) / 2)|0;
+    const seg = x.slice(start, start+win);
+    // Hann + DC remove
+    const w = new Float32Array(win);
+    for(let i=0;i<win;i++){ const t = Math.sin(Math.PI*i/(win-1)); w[i]=t*t; } // Hann
+    let s0=0;
+    for(let i=0;i<win;i++){ s0 += seg[i]; }
+    const m = s0/win;
+    const y = new Float32Array(win);
+    for(let i=0;i<win;i++){ y[i] = (seg[i]-m) * w[i]; }
+    // Allowed pitch range ~ 30..4000 Hz
+    const minLag = Math.max(2, Math.floor(sr/4000));
+    const maxLag = Math.min(win-3, Math.floor(sr/30));
+    // Compute normalized autocorr in that range
+    let energy=0; for(let i=0;i<win;i++) energy += y[i]*y[i];
+    if(energy < 1e-12) return null;
+    let bestLag = -1, best = -1e9;
+    for(let lag=minLag; lag<=maxLag; lag++){
+      let c=0;
+      for(let i=0;i<win-lag;i++){ c += y[i]*y[i+lag]; }
+      const r = c / energy;
+      if(r>best){ best=r; bestLag=lag; }
+    }
+    if(bestLag<0) return null;
+    // Quadratic peak refine
+    const L = bestLag;
+    const rL = (lag)=>{
+      let c=0; for(let i=0;i<win-lag;i++){ c+= y[i]*y[i+lag]; }
+      return c/energy;
+    };
+    const r1 = (L>minLag? rL(L-1): rL(L)), r2 = rL(L), r3 = (L<maxLag? rL(L+1): rL(L));
+    const denom = (r1 - 2*r2 + r3);
+    const delta = Math.abs(denom)>1e-12 ? 0.5*(r1 - r3)/denom : 0;
+    const refined = L + clamp(delta, -0.5, 0.5);
+    return refined; // samples
+  }
+  // Extract one cycle using zero-up crossing near mid & resample to N samples
+  function extractSingleCycle(x, sr, N=2048){
+    const P = estimateFundPeriod(x, sr);
+    if(!P || !Number.isFinite(P) || P<8) return null;
+    const mid = (x.length/2)|0;
+    const span = Math.max(4, Math.floor(P*2));
+    let bestI = -1, bestVal = 1e9;
+    // Find rising zero-crossing near mid
+    for(let i=Math.max(1, mid-span); i<Math.min(x.length-2, mid+span); i++){
+      const a = x[i-1], b=x[i];
+      if(a<=0 && b>0){
+        const t = i-1 + (-a)/(b-a);
+        const dist = Math.abs(t - mid);
+        if(dist < bestVal){ bestVal=dist; bestI = t; }
+      }
+    }
+    // Fallback: take mid-phase as start
+    const t0 = (bestI>=0) ? bestI : (mid - P/2);
+    // Resample exactly one period
+    const out = new Float32Array(N);
+    const tStep = P / N;
+    for(let k=0;k<N;k++){
+      const t = t0 + k*tStep;
+      const i0 = Math.floor(t);
+      const u = t - i0;
+      const i1 = Math.min(x.length-1, i0+1);
+      const s0 = x[Math.max(0, Math.min(x.length-1, i0))];
+      const s1 = x[i1];
+      out[k] = s0*(1-u) + s1*u;
+    }
+    return sealEndpointsCosine(normalize(dcRemove(out)));
+  }
+  // ---- Override: importWAV → cycle‑lock the preview ----
+  const __orig_importWAV = window.importWAV;
+  window.importWAV = async function(file){
+    if(!file){ if(typeof __orig_importWAV==='function') return __orig_importWAV(file); return; }
+    try{
+      const ab = await file.arrayBuffer();
+      const AC = window.audioCtx || window.audioContext || window.webkitAudioContext || null;
+      const ac = AC && AC.sampleRate ? AC : new (window.AudioContext||window.webkitAudioContext)();
+      const buf = await ac.decodeAudioData(ab.slice(0));
+      // mono mixdown
+      const len = buf.length|0;
+      const ch0 = buf.getChannelData(0);
+      let x = new Float32Array(len);
+      if(buf.numberOfChannels>1){
+        const ch1 = buf.getChannelData(1);
+        for(let i=0;i<len;i++) x[i] = 0.5*(ch0[i]+ch1[i]);
+      }else{
+        x.set(ch0);
+      }
+      // Limit to a reasonable window
+      const maxSamp = Math.min(x.length, buf.sampleRate*3); // up to 3s is plenty
+      if(x.length>maxSamp) x = x.slice((x.length-maxSamp)>>1, ((x.length+maxSamp)>>1));
+      // Extract one true cycle and present that as preview
+      const cycle = extractSingleCycle(x, buf.sampleRate, 2048);
+      if(cycle){
+        window.__WT_IMPORT_PREVIEW = cycle;
+        if(typeof __wt_drawImportPreview==='function') __wt_drawImportPreview(cycle);
+        const st = document.getElementById('wt_import_status');
+        if(st){ st.textContent = `WAV imported. Cycle‑locked at ${Math.round(buf.sampleRate/estimateFundPeriod(x, buf.sampleRate)||0)} Hz.`; }
+      }else{
+        // Fallback to original behavior if we cannot estimate
+        if(typeof __orig_importWAV==='function') return __orig_importWAV(file);
+      }
+    }catch(e){
+      console.warn('[WT3] importWAV override failed, falling back', e);
+      if(typeof __orig_importWAV==='function') return __orig_importWAV(file);
+    }
+  };
+  // ---- Export button already clones preview → 32 frames. Ensure preview exists for Draw/PNG too. ----
+  // Ensure Draw/PNG set __WT_IMPORT_PREVIEW to a single 2048-cycle (they already do, but we enforce seam/DC/normalize).
+  const __orig_setPrev = window.__wt_setImportPreview;
+  window.__wt_setImportPreview = function(arr){
+    try{
+      const a = sealEndpointsCosine(normalize(dcRemove(Float32Array.from(arr||[]))));
+      window.__WT_IMPORT_PREVIEW = a;
+      if(typeof __wt_drawImportPreview==='function') __wt_drawImportPreview(a);
+    }catch(e){
+      try{ if(typeof __orig_setPrev==='function') return __orig_setPrev(arr); }catch(_){}
+    }
+  };
+  // ---- Restore AW oscillator path for CustomWT.makeNode (overrides any PeriodicWave patch) ----
+  // We call the already-defined global makeNodeFromFrames to keep morphing/polyphony identical to the main synth.
+  (function(){
+    try{
+      if(window.CustomWT && typeof window.makeNodeFromFrames === 'function'){
+        const origGet = window.CustomWT.get ? window.CustomWT.get.bind(window.CustomWT) : (nm=> (window.CustomWT._lib||{})[nm]);
+        window.CustomWT.makeNode = function(ac, freq, nameOrFrames){
+          let frames=null;
+          if(Array.isArray(nameOrFrames)){
+            frames = nameOrFrames.map(f=>Float32Array.from(f));
+          }else{
+            const rec = origGet(nameOrFrames);
+            frames = rec && rec.frames ? rec.frames.map(f=>Float32Array.from(f)) : null;
+          }
+          if(!frames || !frames.length) return null;
+          // Sanity: ensure frames are single‑cycle (idempotent for drawn/import preview)
+          const N = 2048;
+          const fixed = frames.map(f=>{
+            const a = Float32Array.from(f);
+            if(a.length!==N) return a;
+            // endpoints already sealed via pipeline; keep as-is
+            return a;
+          });
+          return window.makeNodeFromFrames(ac, freq||440, fixed);
+        };
+      }
+    }catch(e){ console.warn('[WT3] makeNode restore failed', e); }
+  })();
+})();
+</script>
+<!-- ==== /WT PATCH 3 ==== -->
+
+
+
+<!-- Rows/Columns wiring (non-invasive) -->
+<script>
+(function(){
+  'use strict';
+  function byId(id){ return document.getElementById(id); }
+  function clamp(v,min,max){ return v<min?min:(v>max?max:v); }
+  function initLayoutControls(){
+    const cols = byId('ui_gridCols');
+    const rows = byId('ui_gridRows');
+    const colsV = byId('ui_gridCols_val');
+    const rowsV = byId('ui_gridRows_val');
+    if(!cols || !rows) return;
+
+    // Reflect current globals
+    try{
+      if(typeof GRID_W!=='undefined'){ cols.value = String(clamp((GRID_W|0)||4,1,16)); }
+      if(typeof gridRows!=='undefined'){ rows.value = String(clamp((gridRows|0)||4,1,16)); }
+    }catch(_){}
+    colsV && (colsV.textContent = cols.value);
+    rowsV && (rowsV.textContent = rows.value);
+
+    function apply(){
+      // Update globals used by buildKeypad()
+      try{
+        if(typeof GRID_W!=='undefined'){ GRID_W = clamp(parseInt(cols.value||'4',10),1,16); }
+        if(typeof gridRows!=='undefined'){ gridRows = clamp(parseInt(rows.value||'4',10),1,16); }
+        // Rebuild the grid
+        if(typeof buildKeypad==='function'){ buildKeypad(); }
+      }catch(e){ console.warn('Layout apply failed', e); }
+      colsV && (colsV.textContent = cols.value);
+      rowsV && (rowsV.textContent = rows.value);
+    }
+
+    cols.addEventListener('input', apply);
+    rows.addEventListener('input', apply);
+  }
+  // Run after DOM ready
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initLayoutControls);
+  }else{
+    initLayoutControls();
+  }
+})();
+</script>
+
