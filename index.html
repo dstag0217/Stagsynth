@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="en">
-<head>
+
+<script>try{if(typeof window.$!=='function'){window.$=(id)=>document.getElementById(id);}}catch(e){}</script>
+
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>StagSynth — FINAL FX Fix</title>
@@ -130,7 +132,16 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
 }
 </style>
 
-<style>@media (max-width: 540px){#seqStepsStrip{display:grid;grid-template-columns:repeat(var(--seq-cols,12),1fr);grid-auto-rows:34px;gap:8px;width:96vw;margin:10px auto 14px auto;touch-action:manipulation}#seqStepsStrip .led{min-height:34px;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}}</style></head>
+<style>@media (max-width: 540px){#seqStepsStrip{display:grid;grid-template-columns:repeat(var(--seq-cols,12),1fr);grid-auto-rows:34px;gap:8px;width:96vw;margin:10px auto 14px auto;touch-action:manipulation}#seqStepsStrip .led{min-height:34px;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}}</style>
+<style>
+  #customPanel .pill{ padding:6px 10px; border:1px solid #444; border-radius:10px; background:#202020; cursor:pointer }
+  #customPanel .pill:hover{ background:#272727 }
+  #wt_frames .thumb{ width:56px; height:40px; border:1px solid #333; border-radius:6px; background:#151515; position:relative; flex:0 0 auto }
+  #wt_frames .thumb canvas{ width:100%; height:100% }
+  #wt_frames .thumb.active{ outline:2px solid #88f }
+</style>
+
+</head>
 <body>
 <style>
   </style>
@@ -156,7 +167,8 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
     <button id="granularToggle" class="synth-btn" aria-expanded="false" aria-controls="granularPanel">Granular</button>
     <button id="samplerToggle" class="synth-btn" aria-expanded="false" aria-controls="samplerPanel">Sampler</button>
     <button id="vocoderToggle" class="synth-btn" aria-expanded="false" aria-controls="vocoderPanel">Vocoder</button>
-    <div style="display:flex;gap:6px;align-items:center">
+        <button id="customToggle" class="synth-btn" aria-expanded="false" aria-controls="customPanel">Custom/Wavetable</button>
+<div style="display:flex;gap:6px;align-items:center">
       <button id="recBtn" class="pill dim" title="Record short take (whole output)">
         <span id="recDot"></span> <span id="recLabel">Record</span>
       </button>
@@ -165,12 +177,13 @@ h1{margin:0;font-weight:900;font-size:18px;letter-spacing:.08em}
   </div>
 </header>
 
+
 <!-- Synth panel -->
 <div id="synthPanel" class="synth-panel" role="region" aria-label="Synth controls">
   <div class="section">
     <h4>Oscillators</h4>
-    <label>Shape <select id="shape" data-midicc><option>sawtooth</option><option>square</option><option>triangle</option><option>sine</option><option>noise</option></select></label>
-    <label>Sub Shape <select id="subShape" data-midicc><option>off</option><option>sine</option><option>square</option><option>triangle</option><option>saw</option><option>noise</option></select></label>
+    <label>Shape <select id="shape" data-midicc><optgroup label="Custom/Wavetables" data-custom="1"></optgroup><option>sawtooth</option><option>square</option><option>triangle</option><option>sine</option><option>noise</option></select></label>
+    <label>Sub Shape <select id="subShape" data-midicc><optgroup label="Custom/Wavetables" data-custom="1"></optgroup><option>off</option><option>sine</option><option>square</option><option>triangle</option><option>saw</option><option>noise</option></select></label>
     <label>Detune (cents) <input type="range" id="detune" data-midicc min="-50" max="50" step="1" value="0"/></label>
     <label>Sub Detune (cents) <input type="range" id="subDetune" data-midicc min="-50" max="50" step="1" value="0"/></label>
     <label>Sub Level <input type="range" id="subLevel" data-midicc min="0" max="1" step="0.01" value="0.8"/></label>
@@ -427,8 +440,8 @@ function tapToUnlockAudio(){
     if(!audioCtx) return;
     const b = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
     const s = audioCtx.createBufferSource(); s.buffer = b; s.connect(audioCtx.destination);
-    try{ s.start(0); }catch{} s.disconnect();
-  }catch{}
+    try{ s.start(0); }catch(e){} s.disconnect();
+  }catch(e){}
 }
 
 /* ===== Core state ===== */
@@ -441,7 +454,7 @@ let mixNode=null, limiter=null, mediaStreamDest=null, mediaRecorder=null;
 let recChunks=[], recStartTs=0, recInter=null; const MAX_REC_S=15;
 const TAKES_KEY='stagsynth_takes_v5';
 function loadTakes(){ try{ return JSON.parse(localStorage.getItem(TAKES_KEY)||'{}'); }catch{return{}} }
-function saveTakes(o){ try{ localStorage.setItem(TAKES_KEY, JSON.stringify(o)); }catch{} }
+function saveTakes(o){ try{ localStorage.setItem(TAKES_KEY, JSON.stringify(o)); }catch(e){} }
 /* ===== Setup / teardown ===== */
 function setupRecordingBus(){
   const a=audioCtx;
@@ -452,7 +465,8 @@ function setupRecordingBus(){
   limiter.threshold.value=-10; limiter.knee.value=20; limiter.ratio.value=8;
   limiter.attack.value=0.003; limiter.release.value=0.25;
 
-  mixNode.connect(limiter).connect(a.destination);
+  const dcBlock = a.createBiquadFilter(); dcBlock.type='highpass'; dcBlock.frequency.value=25; dcBlock.Q.value=0.707;
+mixNode.connect(dcBlock).connect(limiter).connect(a.destination);
 
   // Recorder taps the post-limiter signal so captured audio matches what you hear
   mediaStreamDest=a.createMediaStreamDestination();
@@ -466,7 +480,7 @@ function pickBestAudioMime(){
     'audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm'
   ];
   for(const m of prefer){
-    try{ if(window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; }catch{}
+    try{ if(window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; }catch(e){}
   }
   return '';
 }
@@ -553,7 +567,7 @@ function startTopRecording(){
 }
 
 function stopTopRecording(){
-  if(mediaRecorder && mediaRecorder.state==='recording'){ try{ mediaRecorder.stop(); }catch{} }
+  if(mediaRecorder && mediaRecorder.state==='recording'){ try{ mediaRecorder.stop(); }catch(e){} }
   clearInterval(recInter);
   document.getElementById('recTimer').textContent='';
   const recBtn=document.getElementById('recBtn'); const recLabel=document.getElementById('recLabel');
@@ -579,14 +593,14 @@ function ensureAudio(){
 return Promise.resolve(true);
 }
 async function hardResetAudio(){
-  try{ stopTopRecording(); }catch{}
-  try{ stopGranular(true); }catch{}
-  try{ killSamplerAll(); }catch{}
-  try{ synth?.killAll?.(); }catch{}
-  try{ if(mixNode){ mixNode.disconnect(); } }catch{}
-  try{ if(limiter){ limiter.disconnect(); } }catch{}
-  try{ if(mediaStreamDest){ mediaStreamDest.disconnect(); } }catch{}
-  try{ if(audioCtx){ await audioCtx.close(); } }catch{}
+  try{ stopTopRecording(); }catch(e){}
+  try{ stopGranular(true); }catch(e){}
+  try{ killSamplerAll(); }catch(e){}
+  try{ synth?.killAll?.(); }catch(e){}
+  try{ if(mixNode){ mixNode.disconnect(); } }catch(e){}
+  try{ if(limiter){ limiter.disconnect(); } }catch(e){}
+  try{ if(mediaStreamDest){ mediaStreamDest.disconnect(); } }catch(e){}
+  try{ if(audioCtx){ await audioCtx.close(); } }catch(e){}
   audioCtx=null; mixNode=null; limiter=null; mediaStreamDest=null; mediaRecorder=null;
   synth=null;
 
@@ -606,6 +620,10 @@ function makeDriveCurve(amount=0){
 /* ===== Bitcrusher Worklet (inline) ===== */
 let bitcrusherNode=null, bitcrusherMix=null;
 async function initBitcrusherWorklet(ctx){
+  const isLocal = typeof location!=='undefined' && location.protocol==='file:';
+  const isSecure = (typeof isSecureContext!=='undefined' && isSecureContext) || (location && (location.protocol==='https:' || location.hostname==='localhost'));
+  if(!ctx.audioWorklet || isLocal || !isSecure){ ctx._bcRegistered=false; ctx._bcLoading=false; return; }
+
   if(ctx.audioWorklet && !ctx._bcRegistered && !ctx._bcLoading){
     ctx._bcLoading=true;
     const code = `
@@ -726,10 +744,9 @@ function makeSynth(a){
   bcIn.connect(bcDry).connect(bcSum);
   (async ()=>{
     await initBitcrusherWorklet(a);
-    const node = new AudioWorkletNode(a, 'bitcrusher-processor', { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2] });
-    bitcrusherNode = node;
+    let node=null; try{ if(a && a._bcRegistered){ node = new AudioWorkletNode(a,'bitcrusher-processor',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2]}); } }catch(e){ console.warn('[bitcrusher] node create failed', e && e.name); }bitcrusherNode = node;
     bitcrusherMix  = { dry: bcDry, wet: bcWet };
-    bcIn.connect(node).connect(bcWet);
+    if(node){ bcIn.connect(node).connect(bcWet); }
     bcWet.connect(bcSum);
   })();
 
@@ -748,10 +765,10 @@ function makeSynth(a){
   /* === Compressor + Makeup → master limiter === */
   const comp = a.createDynamicsCompressor();
   const makeup = a.createGain(); makeup.gain.value=1.0;
-  const synthBus = a.createGain(); synthBus.gain.value=1.0; revOut.connect(comp).connect(makeup).connect(synthBus).connect(mixNode); try{ window._stagsynth_synthBus=synthBus; window._stagsynth_synthCtx=a; }catch{}
+  const synthBus = a.createGain(); synthBus.gain.value=1.0; revOut.connect(comp).connect(makeup).connect(synthBus).connect(mixNode); try{ window._stagsynth_synthBus=synthBus; window._stagsynth_synthCtx=a; }catch(e){}
 
   // Start carriers/LFOs
-  try{ rmCarrier.start(); chLFO1.start(); chLFO2.start(); }catch{}
+  try{ rmCarrier.start(); chLFO1.start(); chLFO2.start(); }catch(e){}
 
   // ===== Params (neutral FX by default) =====
   const params={
@@ -896,6 +913,7 @@ function makeSynth(a){
 
   // ===== Voice helpers =====
   const shapeMap={saw:'sawtooth',sawtooth:'sawtooth',square:'square',triangle:'triangle',sine:'sine',noise:'noise',off:'off'};
+  const isCustomShape=(v)=>typeof v==='string' && v.startsWith('custom:');
   function noise(color){
     const buffer=a.createBuffer(1, a.sampleRate*2, a.sampleRate);
     const data=buffer.getChannelData(0);
@@ -945,29 +963,29 @@ function makeSynth(a){
           existing.g.gain.linearRampToValueAtTime(peak,t+e.a);
           existing.g.gain.linearRampToValueAtTime(peak*e.s,t+e.a+e.d);
           existing.e=e; existing.baseFreq=freq;
-        }catch{}
-        try{ this.setBend?.(bendSemis) }catch{};
+        }catch(e){}
+        try{ this.setBend?.(bendSemis) }catch(e){};
         return;
       }
       // Per-voice gain → CORE FILTER (global) → rest of graph
       const g=a.createGain(); g.gain.value=1e-5; g.connect(coreFilter);
 
       // Main & sub osc
-      const mainType=shapeMap[params.shape]||'sawtooth';
-      const subType =shapeMap[params.subShape]||'off';
-      const main=(mainType==='noise')?[noise(params.noiseColor||'white')]:[osc(freq*Math.pow(2,(params.detune||0)/1200),mainType)];
+      const mainType=isCustomShape(params.shape)?params.shape:(shapeMap[params.shape]||'sawtooth');
+      const subType =isCustomShape(params.subShape)?params.subShape:(shapeMap[params.subShape]||'off');
+      const main=(mainType==='noise')?[noise(params.noiseColor||'white')]:[ (window.oscFactory?window.oscFactory(a, freq*Math.pow(2,(params.detune||0)/1200), mainType, params) : osc(freq*Math.pow(2,(params.detune||0)/1200),mainType)) ];
       const base=((params.subOctave||1)===0.5)?(freq/2):freq;
-      const sub =(subType==='off')?[]:(subType==='noise')?[noise(params.noiseColor||'white')]:[osc(base*Math.pow(2,(params.subDetune||0)/1200),subType)];
+      const sub =(subType==='off')?[]:(subType==='noise')?[noise(params.noiseColor||'white')]:[ (window.oscFactory?window.oscFactory(a, base*Math.pow(2,(params.subDetune||0)/1200), subType, params) : osc(base*Math.pow(2,(params.subDetune||0)/1200),subType)) ];
 
       const subG=a.createGain(); subG.gain.value=Math.max(0,Math.min(1,params.subLevel||0)); subG.connect(g);
-      main.forEach(nd=>{ nd.connect(g); try{ nd.start() }catch{} });
-      sub.forEach (nd=>{ nd.connect(subG); try{ nd.start() }catch{} });
+      main.forEach(nd=>{ nd.connect(g); try{ nd.start() }catch(e){} });
+      sub.forEach (nd=>{ nd.connect(subG); try{ nd.start() }catch(e){} });
 
       // ADSR
       g.gain.setValueAtTime(1e-5,t); g.gain.linearRampToValueAtTime(peak,t+e.a); g.gain.linearRampToValueAtTime(peak*e.s,t+e.a+e.d);
 
       voices.set(key,{g,e,baseFreq:freq,main,sub});
-      try{ this.setBend?.(bendSemis) }catch{};
+      try{ this.setBend?.(bendSemis) }catch(e){};
     },
     noteOff(m){
       const key=Math.round(m*2)/2; const v=voices.get(key); if(!v) return;
@@ -976,9 +994,9 @@ function makeSynth(a){
         v.g.gain.cancelScheduledValues(t);
         v.g.gain.setValueAtTime(v.g.gain.value,t);
         v.g.gain.linearRampToValueAtTime(1e-5,stopAt);
-        v.main?.forEach(nd=>{ try{ nd.stop(stopAt) }catch{} });
-        v.sub ?.forEach(nd=>{ try{ nd.stop(stopAt) }catch{} });
-      }catch{}
+        v.main?.forEach(nd=>{ try{ nd.stop(stopAt) }catch(e){} });
+        v.sub ?.forEach(nd=>{ try{ nd.stop(stopAt) }catch(e){} });
+      }catch(e){}
       setTimeout(()=>voices.delete(key),120);
     },
     killAll(){
@@ -987,9 +1005,9 @@ function makeSynth(a){
         try{
           v.g.gain.cancelScheduledValues(t);
           v.g.gain.setValueAtTime(1e-5,t);
-          v.main?.forEach(nd=>{ try{ nd.stop(t+.02) }catch{} });
-          v.sub ?.forEach(nd=>{ try{ nd.stop(t+.02) }catch{} });
-        }catch{}
+          v.main?.forEach(nd=>{ try{ nd.stop(t+.02) }catch(e){} });
+          v.sub ?.forEach(nd=>{ try{ nd.stop(t+.02) }catch(e){} });
+        }catch(e){}
       }
       voices.clear();
     }
@@ -1009,7 +1027,7 @@ const PRESET_PARAMS=[
   'fx_rm_freq','fx_rm_wave','fx_rm_depth','fx_rm_mix'
 ];
 function loadPresetStore(){ try{ return JSON.parse(localStorage.getItem(PRESET_KEY)||'{}'); }catch{return{}} }
-function savePresetStore(s){ try{ localStorage.setItem(PRESET_KEY, JSON.stringify(s)); }catch{} }
+function savePresetStore(s){ try{ localStorage.setItem(PRESET_KEY, JSON.stringify(s)); }catch(e){} }
 function readUI(){ const o={}; PRESET_PARAMS.forEach(k=>{ const el=document.getElementById(k); if(el){ o[k]=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value; } }); return o; }
 function applyPreset(p){ if(!p) return; Object.entries(p).forEach(([k,v])=>{ const el=document.getElementById(k); if(!el) return; el.value = (el.type==='range'||el.type==='number')? String(v): v; }); pushParams(); }
 function initPresets(){
@@ -1026,7 +1044,7 @@ function initPresets(){
   let store=loadPresetStore();
 
   const incoming=(location.hash||'').match(/[#&]presets=([^&]+)/);
-  if(incoming){ try{ const obj=JSON.parse(b64DecodeUnicode(incoming[1])); store={...store, ...obj}; savePresetStore(store); history.replaceState(null,'',location.pathname); }catch{} }
+  if(incoming){ try{ const obj=JSON.parse(b64DecodeUnicode(incoming[1])); store={...store, ...obj}; savePresetStore(store); history.replaceState(null,'',location.pathname); }catch(e){} }
 
   if(Object.keys(store).length===0){ store['Init']=readUI(); savePresetStore(store); }
   function refresh(nm){ const prev=sel.value; sel.innerHTML=''; Object.keys(store).sort().forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); }); sel.value = nm ? nm : (prev || sel.value); }
@@ -1060,7 +1078,7 @@ function pushParams(){
     const el=document.getElementById(id);
     if(!el) return;
     const val=(el.type==='range'||el.type==='number')?parseFloat(el.value):el.value;
-    try{synth.set(id,val)}catch{};
+    try{synth.set(id,val)}catch(e){};
   });
 }
 
@@ -1094,9 +1112,9 @@ function bindBendAndMicro(){
     bendSemis = clamp(semi, -bendRange, bendRange);
     const pct = (0.5 - bendSemis/(bendRange*2)) * 100;
     marker.style.top = pct + '%';
-    try{ synth?.setBend?.(bendSemis) }catch{}
+    try{ synth?.setBend?.(bendSemis) }catch(e){}
   }
-  function resetWheel(){ bendSemis = 0; try{ synth?.setBend?.(0) }catch{} marker.style.top='50%'; }
+  function resetWheel(){ bendSemis = 0; try{ synth?.setBend?.(0) }catch(e){} marker.style.top='50%'; }
   wheel?.addEventListener('pointerdown', (e)=>{ active=true; wheel.setPointerCapture?.(e.pointerId); const r=wheel.getBoundingClientRect(); setBendFromY(e.clientY - r.top, r); });
   wheel?.addEventListener('pointermove', (e)=>{ if(!active) return; const r=wheel.getBoundingClientRect(); setBendFromY(e.clientY - r.top, r); });
   function upHandler(e){ if(!active) return; active=false; wheel.releasePointerCapture?.(e.pointerId); resetWheel(); }
@@ -1114,8 +1132,8 @@ function bindBendAndMicro(){
 /* ===== WebMIDI + CC Learn ===== */
 let midiAccess=null; let midiLearn=false, learnTarget=null;
 const MIDIMAP_KEY='stagsynth_midi_cc_map_v1'; let midiMapStore={ cc:{} };
-function loadMidiMap(){ try{ const raw=localStorage.getItem(MIDIMAP_KEY); if(raw) midiMapStore=JSON.parse(raw)||{cc:{}}; }catch{} }
-function saveMidiMap(){ try{ localStorage.setItem(MIDIMAP_KEY, JSON.stringify(midiMapStore)); }catch{} }
+function loadMidiMap(){ try{ const raw=localStorage.getItem(MIDIMAP_KEY); if(raw) midiMapStore=JSON.parse(raw)||{cc:{}}; }catch(e){} }
+function saveMidiMap(){ try{ localStorage.setItem(MIDIMAP_KEY, JSON.stringify(midiMapStore)); }catch(e){} }
 function setMidiState(t){ const el=document.getElementById('midiState'); if(el) el.textContent=t||''; }
 async function connectMIDI(){
   try{
@@ -1159,7 +1177,7 @@ function onMIDI(ev){
   if(cmd===0xE0){
     const lsb=d1|0, msb=d2|0; const value=(msb<<7)|lsb; const norm=(value-8192)/8192;
     bendSemis = clamp(norm*bendRange, -bendRange, bendRange);
-    try{ synth?.setBend?.(bendSemis) }catch{}
+    try{ synth?.setBend?.(bendSemis) }catch(e){}
     const marker=document.getElementById('bendMarker'); if(marker){ const pct=(0.5 - bendSemis/(bendRange*2))*100; marker.style.top=pct+'%'; }
     return;
   }
@@ -1250,8 +1268,8 @@ function startGranular(){
     grainActive.add(src);
     const t0=t, t1=t0+Math.max(.003,dur*.25), t2=t0+Math.max(.006,dur*.75), t3=t0+dur;
     gNode.gain.setValueAtTime(0.0,t0); gNode.gain.linearRampToValueAtTime(P.gain,t1); gNode.gain.linearRampToValueAtTime(P.gain,t2); gNode.gain.linearRampToValueAtTime(0.0,t3);
-    try{ src.start(t0, Math.max(0,start), dur); src.stop(t3+.05); }catch{}
-    src.onended=()=>{ try{ grainActive.delete(src); }catch{} };
+    try{ src.start(t0, Math.max(0,start), dur); src.stop(t3+.05); }catch(e){}
+    src.onended=()=>{ try{ grainActive.delete(src); }catch(e){} };
   }
   grainTicker=setInterval(()=>{
     const now=audioCtx.currentTime; const dt=Math.max(.005, now-last); last=now;
@@ -1266,10 +1284,10 @@ function startGranular(){
   setGranularStatus('Granular: playing');
 }
 function stopGranular(hard=false){
-  try{ clearInterval(grainTicker); clearInterval(scanTicker); }catch{}
+  try{ clearInterval(grainTicker); clearInterval(scanTicker); }catch(e){}
   grainTicker=null; scanTicker=null;
-  if(hard && grainActive){ try{ grainActive.forEach(s=>{ try{s.stop(0);}catch{} }); grainActive.clear(); }catch{} }
-  try{ if(granularOut){ granularOut.disconnect(); granularOut=null; } }catch{}
+  if(hard && grainActive){ try{ grainActive.forEach(s=>{ try{s.stop(0);}catch(e){} }); grainActive.clear(); }catch(e){} }
+  try{ if(granularOut){ granularOut.disconnect(); granularOut=null; } }catch(e){}
   setGranularStatus('Granular: stopped');
 }
 function bindGranularPanel(){
@@ -1300,7 +1318,7 @@ const SAMPLER_KEY='stagsynth_sampler_v3';
 let samplerLib={}; let samplerCurrent={name:'',buffer:null,root:60};
 let samplerVoices=new Map(); let samplerBus={out:null, filter:null};
 function loadSamplerLib(){ try{ samplerLib=JSON.parse(localStorage.getItem(SAMPLER_KEY)||'{}'); }catch{ samplerLib={}; } }
-function saveSamplerLib(){ try{ localStorage.setItem(SAMPLER_KEY, JSON.stringify(samplerLib)); }catch{} }
+function saveSamplerLib(){ try{ localStorage.setItem(SAMPLER_KEY, JSON.stringify(samplerLib)); }catch(e){} }
 function refreshSamplerList(selName){
   const list=document.getElementById('sam_list'); if(!list) return;
   const names=Object.keys(samplerLib).sort(); const prev=list.value; list.innerHTML=''; names.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; list.appendChild(o); });
@@ -1324,7 +1342,7 @@ async function samplerLoadByName(nm){
 }
 function initSamplerBus(){
   if(!audioCtx) return;
-  try{ if(samplerBus.out && samplerBus.out.context !== audioCtx) samplerBus={out:null,filter:null}; }catch{}
+  try{ if(samplerBus.out && samplerBus.out.context !== audioCtx) samplerBus={out:null,filter:null}; }catch(e){}
   if(samplerBus.out) return;
   const out=audioCtx.createGain(); out.gain.value=parseFloat(document.getElementById('sam_gain').value||'0.9');
   const filter=audioCtx.createBiquadFilter(); filter.type='lowpass'; filter.frequency.value=parseFloat(document.getElementById('sam_cut').value||'10000'); filter.Q.value=parseFloat(document.getElementById('sam_q').value||'0')*20;
@@ -1387,19 +1405,19 @@ function samplerNoteOn(m,vel=0.9){
   g.gain.setValueAtTime(1e-5,t); g.gain.linearRampToValueAtTime(peak,t+e.a); g.gain.linearRampToValueAtTime(peak*e.s,t+e.a+e.d);
   src.connect(g).connect(samplerBus.out);
   const key=Math.round(m*2)/2; samplerVoices.set(key,{src,g,e});
-  try{ src.start(t,start,dur); }catch{}
+  try{ src.start(t,start,dur); }catch(e){}
 }
 function samplerNoteOff(m){
   const key=Math.round(m*2)/2; const v=samplerVoices.get(key); if(!v) return;
   const t=audioCtx.currentTime; const stopAt=t+v.e.r+.02;
   v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(v.g.gain.value,t); v.g.gain.linearRampToValueAtTime(1e-5,stopAt);
-  try{ v.src.stop(stopAt+.01); }catch{} setTimeout(()=>samplerVoices.delete(key),Math.max(10,(stopAt-audioCtx.currentTime)*1000));
+  try{ v.src.stop(stopAt+.01); }catch(e){} setTimeout(()=>samplerVoices.delete(key),Math.max(10,(stopAt-audioCtx.currentTime)*1000));
 }
-function killSamplerAll(){ for(const [k,v] of samplerVoices.entries()){ try{ v.src.stop(0); }catch{} } samplerVoices.clear(); }
+function killSamplerAll(){ for(const [k,v] of samplerVoices.entries()){ try{ v.src.stop(0); }catch(e){} } samplerVoices.clear(); }
 
 /* ===== Routing ===== */
 function routeNoteOn(m,amp){ ensureAudio().then(()=>{ const mode=samplerMode(); if(mode==='sampler'||mode==='both') samplerNoteOn(m,amp); if(mode!=='sampler') synth?.noteOn(m,amp); }); }
-function routeNoteOff(m){ try{ const mode=samplerMode(); if(mode==='sampler'||mode==='both') samplerNoteOff(m); if(mode!=='sampler') synth?.noteOff(m); }catch{} }
+function routeNoteOff(m){ try{ const mode=samplerMode(); if(mode==='sampler'||mode==='both') samplerNoteOff(m); if(mode!=='sampler') synth?.noteOff(m); }catch(e){} }
 
 /* ===== Header & main ===== */
 function measureTopbar(){
@@ -1416,6 +1434,17 @@ function bindHeader(){
   const st=document.getElementById('synthToggle'), sp=document.getElementById('synthPanel'); st.onclick=()=>{ const o=sp.classList.toggle('open'); st.setAttribute('aria-expanded',o?'true':'false'); };
   const gt=document.getElementById('granularToggle'), gp=document.getElementById('granularPanel'); gt.onclick=()=>{ const o=gp.classList.toggle('open'); gt.setAttribute('aria-expanded',o?'true':'false'); };
   const sat=document.getElementById('samplerToggle'), sap=document.getElementById('samplerPanel'); sat.onclick=()=>{ const o=sap.classList.toggle('open'); sat.setAttribute('aria-expanded',o?'true':'false'); if(o){ ensureAudio().then(initSamplerBus);} };
+  
+const ct=document.getElementById('customToggle'), cp=document.getElementById('customPanel');
+if(ct && cp){
+  ct.onclick=()=>{
+    const o=cp.classList.toggle('open');
+    ct.setAttribute('aria-expanded', o?'true':'false');
+    if(o){
+      document.querySelectorAll('.synth-panel').forEach(p=>{ if(p!==cp) p.classList.remove('open'); });
+    }
+  };
+}
   const rec=document.getElementById('recBtn'); rec.onclick=()=>{ ensureAudio().then(()=>{ if(!mediaRecorder||mediaRecorder.state!=='recording') startTopRecording(); else stopTopRecording(); }); };
 
   const ml=document.getElementById('midiLearnBtn');
@@ -1459,8 +1488,8 @@ document.addEventListener('DOMContentLoaded', main);
     LOW_LATENCY = !!on;
     reflectButton(LOW_LATENCY);
 
-    try{ if (typeof ai!=='undefined' && ai && ai.tap) ai.tap.fftSize = on ? 512 : 2048; }catch{}
-    try{ if (window.rec && window.rec.dest && !window.rec.active){ try{ window.rec.dest.disconnect(); }catch{} } }catch{}
+    try{ if (typeof ai!=='undefined' && ai && ai.tap) ai.tap.fftSize = on ? 512 : 2048; }catch(e){}
+    try{ if (window.rec && window.rec.dest && !window.rec.active){ try{ window.rec.dest.disconnect(); }catch(e){} } }catch(e){}
     try{
       if (window.comp){
         window._compAttackDefault = window._compAttackDefault ?? comp.attack;
@@ -1468,7 +1497,7 @@ document.addEventListener('DOMContentLoaded', main);
         comp.attack = on ? 0.001 : window._compAttackDefault;
         comp.release = on ? 0.06  : window._compReleaseDefault;
       }
-    }catch{}
+    }catch(e){}
     try{
       const chRate=document.getElementById('fx_ch_rate');
       const chDepth=document.getElementById('fx_ch_depth');
@@ -1476,8 +1505,8 @@ document.addEventListener('DOMContentLoaded', main);
         if(chDepth){ const v=Math.min(parseFloat(chDepth.value)||6,6); if(v!=parseFloat(chDepth.value||0)){ chDepth.value=String(v); chDepth.dispatchEvent(new Event('input',{bubbles:true})); } }
         if(chRate){ const v=Math.min(parseFloat(chRate.value)||2,2); if(v!=parseFloat(chRate.value||0)){ chRate.value=String(v); chRate.dispatchEvent(new Event('input',{bubbles:true})); } }
       }
-    }catch{}
-    try{ window._bcLazy = on; }catch{}
+    }catch(e){}
+    try{ window._bcLazy = on; }catch(e){}
 
     if (window.DEBUG_LL) console.log('[LL] state =', LOW_LATENCY);
   }
@@ -1520,7 +1549,7 @@ document.addEventListener('DOMContentLoaded', main);
 
   async function ensureMic(){ if(vocCtx.modSrc) return true; try{ const ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false}); vocCtx.modStream=ms; await ensureAudio(); const a=audioCtx; vocCtx.modSrc=a.createMediaStreamSource(ms); vocCtx.modGain=a.createGain(); vocCtx.modGain.gain.value=parseFloat(document.getElementById('voc_mod_gain').value||1); vocCtx.modPre=a.createBiquadFilter(); vocCtx.modPre.type='highpass'; vocCtx.modPre.frequency.value=90; vocCtx.modGate=a.createDynamicsCompressor(); vocCtx.modGate.threshold.value=parseFloat(document.getElementById('voc_gate').value||-70); vocCtx.modGate.ratio.value=20; vocCtx.modGate.knee.value=0; vocCtx.modGate.attack.value=0.005; vocCtx.modGate.release.value=0.25; vocCtx.modSrc.connect(vocCtx.modGain).connect(vocCtx.modPre).connect(vocCtx.modGate); return true; }catch(e){ const s=document.getElementById('voc_status'); if(s) s.textContent='Mic permission denied'; return false; } }
 
-  function destroyBands(){ vocCtx.bands.forEach(b=>{ try{ b.modBPF.disconnect(); b.carBPF.disconnect(); b.envRect?.disconnect(); b.envLP.disconnect(); b.vca.disconnect(); }catch{} }); vocCtx.bands=[]; try{ vocCtx.sum?.disconnect(); }catch{} }
+  function destroyBands(){ vocCtx.bands.forEach(b=>{ try{ b.modBPF.disconnect(); b.carBPF.disconnect(); b.envRect?.disconnect(); b.envLP.disconnect(); b.vca.disconnect(); }catch(e){} }); vocCtx.bands=[]; try{ vocCtx.sum?.disconnect(); }catch(e){} }
 
   function rebuildVocoder(){ if(!window.audioCtx) return; const a=audioCtx; destroyBands(); if(!vocCtx.wet){ vocCtx.wet=a.createGain(); } if(!vocCtx.dry){ vocCtx.dry=a.createGain(); } if(!vocCtx.out){ vocCtx.out=a.createGain(); } if(!vocCtx.sum){ vocCtx.sum=a.createGain(); vocCtx.sum.gain.value=1; }
     const N=parseInt(document.getElementById('voc_bands').value||12,10), lo=parseFloat(document.getElementById('voc_lo').value||200), hi=parseFloat(document.getElementById('voc_hi').value||5000), Q=parseFloat(document.getElementById('voc_q').value||2.0), sh=parseFloat(document.getElementById('voc_shift').value||0), att=Math.max(0.0005,(parseFloat(document.getElementById('voc_att').value||12))/1000), rel=Math.max(0.005,(parseFloat(document.getElementById('voc_rel').value||160))/1000);
@@ -1528,7 +1557,7 @@ document.addEventListener('DOMContentLoaded', main);
     if(!vocCtx.sibHP){ vocCtx.sibHP=a.createBiquadFilter(); vocCtx.sibHP.type='highpass'; vocCtx.sibHP.frequency.value=5000; } if(!vocCtx.sibGain){ vocCtx.sibGain=a.createGain(); } vocCtx.sibGain.gain.value=parseFloat(document.getElementById('voc_sib').value||0.15);
     for(let i=0;i<N;i++){ const fc=hzForBand(i,N,lo,hi,sh); const modBPF=a.createBiquadFilter(); modBPF.type='bandpass'; modBPF.Q.value=Q; modBPF.frequency.value=fc; const carBPF=a.createBiquadFilter(); carBPF.type='bandpass'; carBPF.Q.value=Q; carBPF.frequency.value=fc; const rect=a.createWaveShaper(); const n=2048,curve=new Float32Array(n); for(let j=0;j<n;j++){ const x=j/(n-1)*2-1; curve[j]=Math.abs(x);} rect.curve=curve; rect.oversample='2x'; const envLP=a.createBiquadFilter(); envLP.type='lowpass'; envLP.frequency.value=1/(2*Math.PI*att)*0.25; const vca=a.createGain(); vca.gain.value=0; vocCtx.modGate.connect(modBPF).connect(rect).connect(envLP); envLP.connect(vca.gain); vocCtx.carIn.connect(carBPF).connect(vca).connect(vocCtx.sum); vocCtx.bands.push({modBPF,carBPF,envRect:rect,envLP,vca}); }
     vocCtx.modGate.connect(vocCtx.sibHP).connect(vocCtx.sibGain).connect(vocCtx.sum);
-    try{ vocCtx.wet.disconnect(); vocCtx.dry.disconnect(); vocCtx.out.disconnect(); }catch{}
+    try{ vocCtx.wet.disconnect(); vocCtx.dry.disconnect(); vocCtx.out.disconnect(); }catch(e){}
     vocCtx.sum.connect(vocCtx.wet).connect(vocCtx.out).connect(mixNode);
   }
 
@@ -1536,7 +1565,7 @@ document.addEventListener('DOMContentLoaded', main);
     const t0=performance.now();
     (function tick(){
       const bus=window._stagsynth_synthBus;
-      if(bus && vocCtx?.carIn){ try{ vocCtx.carIn.disconnect(); }catch{} bus.connect(vocCtx.carIn); console.log('[voc] carrier wired to synthBus'); return; }
+      if(bus && vocCtx?.carIn){ try{ vocCtx.carIn.disconnect(); }catch(e){} bus.connect(vocCtx.carIn); console.log('[voc] carrier wired to synthBus'); return; }
       if(performance.now()-t0<maxMs) requestAnimationFrame(tick);
     })();
   }
@@ -1544,7 +1573,7 @@ document.addEventListener('DOMContentLoaded', main);
   function setCarrier(sel){
     vocCtx.carrierSel=sel; if(!window.audioCtx) return;
     if(!vocCtx.carIn){ vocCtx.carIn=audioCtx.createGain(); vocCtx.carIn.gain.value=1; }
-    try{ vocCtx.carIn.disconnect(); }catch{}
+    try{ vocCtx.carIn.disconnect(); }catch(e){}
     const synthBus=window._stagsynth_synthBus;
     const samOut=(typeof samplerBus==='object' && samplerBus.out) ? samplerBus.out : null;
     if(sel==='synth'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); }
@@ -1612,8 +1641,8 @@ document.addEventListener('DOMContentLoaded', main);
   }
 
   function destroyBands(){
-    vocCtx.bands.forEach(b=>{ try{ b.modBPF.disconnect(); b.carBPF.disconnect(); b.envRect?.disconnect(); b.envLP.disconnect(); b.vca.disconnect(); }catch{} });
-    vocCtx.bands=[]; try{ vocCtx.sum?.disconnect(); }catch{}
+    vocCtx.bands.forEach(b=>{ try{ b.modBPF.disconnect(); b.carBPF.disconnect(); b.envRect?.disconnect(); b.envLP.disconnect(); b.vca.disconnect(); }catch(e){} });
+    vocCtx.bands=[]; try{ vocCtx.sum?.disconnect(); }catch(e){}
   }
 
   function rebuildVocoder(){
@@ -1655,7 +1684,7 @@ document.addEventListener('DOMContentLoaded', main);
     }
     vocCtx.modGate.connect(vocCtx.sibHP).connect(vocCtx.sibGain).connect(vocCtx.sum);
 
-    try{ vocCtx.wet.disconnect(); vocCtx.dry.disconnect(); vocCtx.out.disconnect(); }catch{}
+    try{ vocCtx.wet.disconnect(); vocCtx.dry.disconnect(); vocCtx.out.disconnect(); }catch(e){}
     vocCtx.sum.connect(vocCtx.wet).connect(vocCtx.out).connect(mixNode);
   }
 
@@ -1664,7 +1693,7 @@ document.addEventListener('DOMContentLoaded', main);
     (function tick(){
       const bus=window._stagsynth_synthBus;
       if(bus && vocCtx?.carIn){
-        try{ vocCtx.carIn.disconnect(); }catch{}
+        try{ vocCtx.carIn.disconnect(); }catch(e){}
         bus.connect(vocCtx.carIn);
         console.log('[voc] carrier wired to synthBus');
         return;
@@ -1676,7 +1705,7 @@ document.addEventListener('DOMContentLoaded', main);
   function setCarrier(sel){
     vocCtx.carrierSel=sel; if(!window.audioCtx) return;
     if(!vocCtx.carIn){ vocCtx.carIn=audioCtx.createGain(); vocCtx.carIn.gain.value=1; }
-    try{ vocCtx.carIn.disconnect(); }catch{}
+    try{ vocCtx.carIn.disconnect(); }catch(e){}
     const synthBus=window._stagsynth_synthBus;
     const samOut=(typeof samplerBus==='object' && samplerBus.out) ? samplerBus.out : null;
     if(sel==='synth'){ if(synthBus) synthBus.connect(vocCtx.carIn); else waitForSynthBusAndWire(); }
@@ -1766,7 +1795,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     ctx = window.audioCtx;
     if (!ctx || !window.mixNode) return;
 
-    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch{} }
+    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch(e){} }
 
     if (!wet) {
       // Outputs
@@ -1778,7 +1807,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       noiseGen = ctx.createBufferSource();
       const nbuf = ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
       const d = nbuf.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
-      noiseGen.buffer = nbuf; noiseGen.loop = true; try{ noiseGen.start(); }catch{}
+      noiseGen.buffer = nbuf; noiseGen.loop = true; try{ noiseGen.start(); }catch(e){}
       noiseGen.connect(noiseGain);
 
       // Sum → your master bus
@@ -1802,7 +1831,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   function destroyBands(){
     bands.forEach(b=>{
-      try{ b.modBP.disconnect(); b.rect.disconnect(); b.envLP.disconnect(); b.envGain.disconnect(); b.carBP.disconnect(); b.mul.disconnect(); }catch{}
+      try{ b.modBP.disconnect(); b.rect.disconnect(); b.envLP.disconnect(); b.envGain.disconnect(); b.carBP.disconnect(); b.mul.disconnect(); }catch(e){}
     });
     bands.length = 0;
   }
@@ -1860,7 +1889,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         if (badge) badge.textContent = 'Mic permission denied';
       }
     }else{
-      try{ micStream?.getTracks().forEach(t=>t.stop()); }catch{}
+      try{ micStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
       micStream=null; micSrc=null; modHP=null;
       if (badge) badge.textContent = 'Mic: off';
     }
@@ -1875,7 +1904,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     try{
       const tap = window.synth?.getVocoderCarrierTap?.();
       if (tap) return tap;
-    }catch{}
+    }catch(e){}
 
     // Safe fallback: pre-limiter mix (still produces vocoder effect)
     return window.mixNode || null;
@@ -1883,7 +1912,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   function connectRouting(){
     // Disconnect prior
-    bands.forEach(b=>{ try{ b.modBP.disconnect(); }catch{} try{ b.carBP.disconnect(); }catch{} });
+    bands.forEach(b=>{ try{ b.modBP.disconnect(); }catch(e){} try{ b.carBP.disconnect(); }catch(e){} });
 
     // Modulator (mic) → all mod bands
     if (modHP){ bands.forEach(b=> modHP.connect(b.modBP)); }
@@ -1986,7 +2015,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   function tr(){ return +($('seq_trans')?.value||0); }
 
   function renderHighlights(currentIdx, playing){
-    ensureStrip(); const sEl=$('seqStepsStrip');
+    window.ensureStrip && window.ensureStrip(); const sEl=$('seqStepsStrip');
     if(sEl){
       const L=len(); const nodes=$$('.led', sEl);
       nodes.forEach((n,i)=>{
@@ -2012,7 +2041,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     }
   }
 
-  function allOff(){ try{ held.forEach(m=> routeNoteOff(m)); }catch{} held.length=0; }
+  function allOff(){ try{ held.forEach(m=> routeNoteOff(m)); }catch(e){} held.length=0; }
   function setOn(v){ ON=!!v; $('seqToggle')?.setAttribute('aria-pressed', String(ON)); ui(ON); if(!ON) setPlay(false); renderHighlights(step, PLAY); }
   function setPlay(v){
     PLAY=!!v;
@@ -2074,7 +2103,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Click LED to jump step (when not playing)
   
 function attachStripClick(){
-  ensureStrip();
+  window.ensureStrip && window.ensureStrip();
   const sEl = $('seqStepsStrip');
   if(!sEl || sEl.__seqHooked) return;
   sEl.__seqHooked = true;
@@ -2140,9 +2169,7 @@ function attachStripClick(){
 
   $('seqToggle')?.addEventListener('click', ()=> setOn(!ON));
   $('seqModeBtn')?.addEventListener('click', ()=> setPlay(!PLAY));
-  $('seq_clear')?.addEventListener('click', ()=> pattern.clear());
-
-  // initial
+  $('seq_clear')?.addEventListener('click', ()=>{ try{ pattern.clear(); }catch(e){} try{ step = 0; }catch(e){} try{ setPlay(false); }catch(e){} try{ renderHighlights(step,false); }catch(e){} });// initial
   attachDelegation(); attachStripClick(); renderHighlights(step,false);
   // --- MIDI-aware: intercept global routeNoteOn while in INPUT mode ---
   if (!window.__seq_origRouteNoteOn && typeof window.routeNoteOn === 'function'){
@@ -2179,7 +2206,7 @@ function attachStripClick(){
               g.gain.setValueAtTime(0.0, t0);
               g.gain.linearRampToValueAtTime(0.08, t0 + 0.005);
               g.gain.linearRampToValueAtTime(0.0,  t0 + 0.14);
-              osc.connect(g).connect(ac.destination);
+              osc.connect(g).connect(window.mixNode||ac.destination);
               osc.start(t0);
               osc.stop(t0 + 0.16);
             }
@@ -2201,8 +2228,8 @@ function attachStripClick(){
     const el = $('seq_steps'); if(!el || el.__bound) return; el.__bound = true;
     el.addEventListener('input', ()=>{
       maxCols = Math.max(1, +el.value || 16);
-      ensureStrip();
-      renderHighlights(step % maxCols, PLAY);
+      window.ensureStrip && window.ensureStrip();
+      try{ if (window.renderHighlights) renderHighlights(step % maxCols, PLAY); }catch(e){}
     });
   }
   function __rebindSeqUI(){ try{ bindStepsLive(); }catch(e){} }
@@ -2217,7 +2244,7 @@ function attachStripClick(){
     const el = $('seq_steps'); if(!el || el.__bound) return; el.__bound = true;
     el.addEventListener('input', ()=>{
       maxCols = Math.max(1, +el.value || 16);
-      ensureStrip();
+      window.ensureStrip && window.ensureStrip();
       renderHighlights(step % maxCols, PLAY);
     });
   })();
@@ -2237,7 +2264,7 @@ function attachStripClick(){
     const parent = pad.parentElement || document.body;
     // If strip is not already immediately before keypad, move it
     if (strip.nextElementSibling !== pad){
-      try{ parent.insertBefore(strip, pad); }catch{}
+      try{ parent.insertBefore(strip, pad); }catch(e){}
     }
   }
   if(document.readyState === 'loading'){
@@ -2276,9 +2303,1655 @@ document.addEventListener('DOMContentLoaded', ()=>{
   updateSeqGridForSteps();
 }, {once:true});
 </script>
+
+<!-- Custom/Wavetable Panel -->
+<div id="customPanel" class="synth-panel" role="region" aria-label="Custom Waveforms">
+  <div class="section">
+    <h4>Custom / Wavetable Editor</h4>
+    <div class="row" style="gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:300px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <label>Tool
+            <select id="wt_tool">
+              <option value="draw" selected>Draw</option>
+              <option value="erase">Erase</option>
+              <option value="smooth">Smooth</option>
+              <option value="normalize">Normalize</option>
+              <option value="zero">Zero DC</option>
+              <option value="invert">Invert</option>
+            </select>
+          </label>
+          <label>Brush <input type="range" id="wt_brush" min="1" max="40" step="1" value="6"/></label>
+          <button id="wt_clear" class="pill">Clear</button>
+        </div>
+        <canvas id="wt_canvas" width="768" height="240" style="width:100%;border:1px solid #333;border-radius:8px;background:#111"<canvas id="wt_canvas" width="768" height="240" style="touch-action:none; width:100%;border:1px solid #333;border-radius:8px;background:#111"></canvas>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+          <button id="wt_add_frame" class="pill">Add as Frame</button>
+          <button id="wt_replace_frame" class="pill">Replace Current</button>
+          <button id="wt_delete_frame" class="pill">Delete Current</button>
+          <label> Insert In-betweens
+            <input type="number" id="wt_inbet" min="0" max="256" step="1" value="0" style="width:64px"/>
+          </label>
+          <label style="display:block;margin-top:6px"> Morph
+            <select id="wt_morph">
+              <option value="none">None</option>
+              <option value="xfade" selected>Crossfade</option>
+            </select>
+          </label></div>
+      </div>
+
+      <div style="flex:1;min-width:280px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+          <input type="file" id="wt_import_png" accept="image/png" />
+          <button id="wt_load_png" class="pill">Import PNG</button>
+        </div>
+
+<div id="wt_import_export_row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
+  <label style="display:inline-flex;align-items:center;gap:6px">Name
+    <input id="wt_import_name" type="text" placeholder="Imported WT" style="width:200px"/>
+  </label>
+  <button id="wt_import_export" class="pill">Export to Oscs</button>
+</div>
+
+
+<div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+          <input id="wt_name" placeholder="Wave name" style="flex:1"/>
+          <button id="wt_export" class="pill">Export to Oscs</button>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;margin:8px 0">
+           <label>Frame <input id="wt_frame_idx" type="range" min="0" max="0" step="1" value="0" style="width:160px"/></label>
+          <span id="wt_frame_readout" class="badge">0/0</span>
+        </div>
+        <div id="wt_frames" style="display:flex;gap:6px;overflow:auto;padding:6px;border:1px dashed #333;border-radius:8px;min-height:60px"></div>
+        
+        </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+(()=>{
+  let __wtPreview = null;
+  async function __ensureAC(){
+    try{
+      if(window.ensureAudio) { await ensureAudio(); return window.audioCtx; }
+      return window.audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    }catch(e){ return null; }
+  }
+  function __buildPW(ac, frame){
+    const N = frame.length; const TWO_PI = Math.PI*2; const MAX_HARM = 128;
+    const real = new Float32Array(MAX_HARM+1), imag = new Float32Array(MAX_HARM+1);
+    for(let k=1;k<=MAX_HARM;k++){
+      let a=0,b=0;
+      for(let n=0;n<N;n++){ const phi=TWO_PI*k*n/N, x=frame[n]; a += x*Math.cos(phi); b += x*Math.sin(phi); }
+      real[k] = (2/N)*a; imag[k] = -(2/N)*b;
+    }
+    return ac.createPeriodicWave(real, imag, {disableNormalization:true});
+  }
+  async function __startPreview(getFrame){
+    const ac = await __ensureAC(); if(!ac) return;
+    const g = ac.createGain(); g.gain.value = 0.18; g.connect(ac.destination);
+    const o = ac.createOscillator();
+    const fr = getFrame(); if(fr){ try{ o.setPeriodicWave(__buildPW(ac, fr)); }catch(e){} }
+    o.connect(g);
+    try{ o.start(); }catch(e){}
+    __wtPreview = {ac,o,g,getFrame};
+  }
+  function __stopPreview(){
+    const P = __wtPreview; __wtPreview = null;
+    if(!P) return;
+    try{ P.o.stop(); }catch(e){} try{ P.o.disconnect(); }catch(e){} try{ P.g.disconnect(); }catch(e){}
+  }
+  function __updatePreview(){
+    const P = __wtPreview; if(!P) return;
+    const fr = P.getFrame(); if(!fr) return;
+    try{ P.o.setPeriodicWave(__buildPW(P.ac, fr)); }catch(e){}
+  }
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const chk = document.getElementById('wt_preview_chk');
+    const slider = document.getElementById('wt_frame_idx');
+    if(chk){
+      chk.addEventListener('change', ()=>{
+        if(chk.checked){
+          __startPreview(()=> (window.__WT_CURRENT_FRAME || null));
+        }else{
+          __stopPreview();
+        }
+      });
+    }
+    if(slider){
+      slider.addEventListener('input', ()=>{ __updatePreview(); });
+    }
+  }, {once:true});
+})();
+</script>
+
+
+<script>
+(function(){
+  try{
+    const cvs = document.getElementById('wt_canvas');
+    if(cvs && !cvs.__wtBound){
+      cvs.__wtBound = true;
+      cvs.style.touchAction = 'none';
+      cvs.addEventListener('pointerdown', function(e){
+        try{ cvs.setPointerCapture && cvs.setPointerCapture(e.pointerId); }catch(_){}
+      }, {passive:false});
+    }
+    const file = document.getElementById('wt_import_png');
+    const btn  = document.getElementById('wt_load_png');
+    const defaultMode = 'plot';
+window.__WT_loadBitmap = async function(file){
+      if (window.createImageBitmap){
+        try{ return await createImageBitmap(file); }catch(e){}
+      }
+      return await new Promise((resolve, reject)=>{
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = ()=>{ resolve(img); URL.revokeObjectURL(url); };
+        img.onerror = (err)=>{ reject(err); URL.revokeObjectURL(url); };
+        img.src = url;
+      });
+    };
+    function triggerImport(){
+      const f = file && file.files && file.files[0];
+      if(!f) return;
+      try{
+        if (typeof importPNG === 'function'){
+          importPNG(f, 'plot');
+        } else if (window.__WT_EDITOR_IMPORT){
+          window.__WT_EDITOR_IMPORT(f, 'plot');
+        }
+      }catch(e){ console.warn('[WT] import failed', e); }
+    }
+    if(file && !file.__wtBound){
+      file.__wtBound = true;
+      file.addEventListener('change', triggerImport);
+    }
+    if(btn && !btn.__wtBound){
+      btn.__wtBound = true;
+      btn.addEventListener('click', ()=>{ if(!(file && file.files && file.files[0])){ try{ file.click(); }catch(e){} } else { try{ triggerImport(); }catch(e){} } });
+    }
+  }catch(e){ console.warn('[WT] enhancement setup error', e); }
+})();
+</script>
+
+
+<script>
+// ===== Custom / Wavetable Editor (injected) =====
+(function(){
+  const TWO_PI = Math.PI*2;
+  const N = 2048;
+  const MAX_HARM = 128;
+  const LIB_KEY = 'stagsynth_customwaves_v1';
+  let LIB = { };
+  try{ LIB = JSON.parse(localStorage.getItem(LIB_KEY)||'{}'); }catch{ LIB={}; }
+
+  // UI refs
+  const cvs = document.getElementById('wt_canvas');
+  const ctx = cvs ? cvs.getContext('2d', { desynchronized:true }) : null;
+  const toolSel = document.getElementById('wt_tool');
+  const brushR = document.getElementById('wt_brush');
+  const clearB = document.getElementById('wt_clear');
+  const addB = document.getElementById('wt_add_frame');
+  const repB = document.getElementById('wt_replace_frame');
+  const delB = document.getElementById('wt_delete_frame');
+  const morphSel = document.getElementById('wt_morph');
+  const inbetN = document.getElementById('wt_inbet');
+  const framesDiv = document.getElementById('wt_frames');
+  const frameSlider = document.getElementById('wt_frame_idx');
+  const frameReadout = document.getElementById('wt_frame_readout');
+  const nameF = document.getElementById('wt_name');
+  const exportB = document.getElementById('wt_export');
+  const auditionB = document.getElementById('wt_audition');
+
+  if(!cvs || !ctx) return;
+
+  let tool = toolSel ? toolSel.value : 'draw';
+  let brush = brushR ? parseInt(brushR.value||'6',10) : 6;
+  let drawing = false;
+  let current = new Float32Array(N);
+  let frames = [];
+  let frameIdx = 0;
+
+  function saveLib(){ try{ localStorage.setItem(LIB_KEY, JSON.stringify(LIB)); }catch(e){} }
+  function zeroDC(arr){ let s=0; for(const v of arr) s+=v; const dc=s/arr.length; for(let i=0;i<arr.length;i++) arr[i]-=dc; }
+  function normalize(arr){ let m=1e-12; for(const v of arr) m=Math.max(m,Math.abs(v)); if(m>0) for(let i=0;i<arr.length;i++) arr[i]/=m; }
+  function smoothOne(arr, passes=1){ for(let p=0;p<passes;p++){ for(let i=1;i<arr.length-1;i++) arr[i]=(arr[i-1]+arr[i]+arr[i+1])/3; } }
+
+  function drawGrid(){
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    ctx.fillStyle='#111'; ctx.fillRect(0,0,cvs.width,cvs.height);
+    // midline
+    ctx.strokeStyle='#333'; ctx.beginPath();
+    ctx.moveTo(0, cvs.height/2); ctx.lineTo(cvs.width, cvs.height/2); ctx.stroke();
+    // waveform
+    ctx.strokeStyle='#7cf'; ctx.lineWidth=2; ctx.beginPath();
+    for(let i=0;i<N;i++){ const x=i*(cvs.width/(N-1)); const y=(0.5-current[i]*0.5)*cvs.height; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);}
+    ctx.stroke();
+    window.__WT_CURRENT_FRAME = current;
+  }
+
+  function toIndex(x){ return Math.max(0, Math.min(N-1, Math.round(x*(N-1)/cvs.clientWidth))); }
+  function yToVal(y){ const rel=y/cvs.clientHeight; return (0.5-rel)*2; }
+
+  function handleDraw(e){
+    const r=cvs.getBoundingClientRect();
+    const cx = (e.clientX!=null? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX)) || 0;
+    const cy = (e.clientY!=null? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY)) || 0;
+    const x=cx - r.left, y=cy - r.top;
+    const i=toIndex(x), val=yToVal(y);
+    const half=Math.max(1, Math.floor(brush/2));
+    for(let k=-half;k<=half;k++){ const idx=Math.max(0,Math.min(N-1,i+k)); if(tool==='draw') current[idx]=val; else if(tool==='erase') current[idx]=0; }
+    if(tool==='smooth') smoothOne(current,1);
+    if(tool==='normalize') normalize(current);
+    if(tool==='zero') zeroDC(current);
+    if(tool==='invert'){ for(let j=0;j<N;j++) current[j]=-current[j]; tool='draw'; if(toolSel) toolSel.value='draw'; }
+    drawGrid();
+  }
+
+  cvs.style.touchAction='none';
+  cvs.onpointerdown = (e)=>{ drawing=true; try{ cvs.setPointerCapture(e.pointerId); }catch(e){} handleDraw(e); };
+  cvs.onpointermove = (e)=>{ if(drawing) handleDraw(e); };
+  cvs.onpointerup = ()=>{ drawing=false; };
+  cvs.onpointerleave = ()=>{ drawing=false; };
+  // Extra safety: ensure canvas is interactable and fall back to mouse/touch if Pointer Events are quirky
+  try{ cvs.style.pointerEvents = 'auto'; cvs.style.userSelect = 'none'; }catch(e){}
+  cvs.oncontextmenu = (e)=>{ e.preventDefault(); };
+
+  // Mouse fallback
+  const __startDraw = (e)=>{ drawing=true; handleDraw(e); };
+  const __moveDraw = (e)=>{ if(drawing) handleDraw(e); };
+  const __endDraw  = ()=>{ drawing=false; };
+
+  cvs.addEventListener('mousedown', __startDraw);
+  cvs.addEventListener('mousemove', __moveDraw);
+  cvs.addEventListener('mouseup', __endDraw);
+  cvs.addEventListener('mouseleave', __endDraw);
+
+  // Touch fallback
+  const __opt = { passive:false };
+  cvs.addEventListener('touchstart', (e)=>{ e.preventDefault(); __startDraw(e); }, __opt);
+  cvs.addEventListener('touchmove',  (e)=>{ e.preventDefault(); __moveDraw(e); }, __opt);
+  cvs.addEventListener('touchend',   (e)=>{ e.preventDefault(); __endDraw(e); }, __opt);
+  cvs.addEventListener('touchcancel',(e)=>{ e.preventDefault(); __endDraw(e); }, __opt);
+
+
+  if(toolSel) toolSel.onchange = ()=> tool = toolSel.value;
+  if(brushR) brushR.oninput = ()=> brush = parseInt(brushR.value,10);
+  if(clearB) clearB.onclick = ()=>{ current.fill(0); drawGrid(); };
+
+  function updateFrameReadout(){ frameReadout && (frameReadout.textContent = frames.length ? (frameIdx+1)+'/'+frames.length : '0/0'); }
+  function refreshThumbs(){
+    if(!framesDiv) return;
+    framesDiv.innerHTML='';
+    frames.forEach((fr, idx)=>{
+      const d=document.createElement('div'); d.className='thumb'+(idx===frameIdx?' active':'');
+      const c=document.createElement('canvas'); c.width=56; c.height=40; d.appendChild(c);
+      const cx=c.getContext('2d');
+      cx.fillStyle='#151515'; cx.fillRect(0,0,56,40);
+      cx.strokeStyle='#6f8'; cx.lineWidth=1; cx.beginPath();
+      for(let i=0;i<N;i++){ const x=i*(56/(N-1)); const y=(0.5-fr[i]*0.5)*40; if(i===0) cx.moveTo(x,y); else cx.lineTo(x,y);}
+      cx.stroke();
+      d.onclick=()=>{ frameIdx=idx; current.set(frames[frameIdx]); drawGrid(); if(frameSlider) frameSlider.value=String(frameIdx); updateFrameReadout(); refreshThumbs(); };
+      framesDiv.appendChild(d);
+    });
+    if(frameSlider){ frameSlider.max = Math.max(0, frames.length-1); frameSlider.value = Math.max(0, Math.min(frames.length-1, frameIdx)); }
+    updateFrameReadout();
+  }
+
+  if(frameSlider) frameSlider.oninput=()=>{ frameIdx = Math.max(0, Math.min(frames.length-1, parseInt(frameSlider.value||'0'))); if(frames[frameIdx]) current.set(frames[frameIdx]); drawGrid(); };
+
+  if(addB) addB.onclick = ()=>{ const fr=new Float32Array(current); zeroDC(fr); normalize(fr); frames.push(fr); frameIdx=frames.length-1; refreshThumbs(); };
+  if(repB) repB.onclick = ()=>{ if(!frames.length) return; const fr=new Float32Array(current); zeroDC(fr); normalize(fr); frames[frameIdx]=fr; refreshThumbs(); };
+  if(delB) delB.onclick = ()=>{ if(!frames.length) return; frames.splice(frameIdx,1); frameIdx=Math.max(0,frameIdx-1); if(frames[frameIdx]) current.set(frames[frameIdx]); drawGrid(); refreshThumbs(); };
+
+  if(morphSel && inbetN){
+    const genB = document.getElementById('wt_gen_morph');
+    if(genB) genB.onclick = ()=>{ if(frames.length<2) return; const out=[]; for(let i=0;i<frames.length-1;i++){ const a=frames[i], b=frames[i+1]; out.push(a); const steps=Math.max(0, Math.min(256, parseInt(inbetN.value||'0'))); for(let s=1;s<=steps;s++){ const t=s/(steps+1); const fr=new Float32Array(N); for(let k=0;k<N;k++) fr[k]=a[k]*(1-t)+b[k]*t; zeroDC(fr); normalize(fr); out.push(fr); } } out.push(frames[frames.length-1]); __wt_setImportPreview(out && out[0]);;
+  }
+
+  
+  // ---- Import Preview helpers ----
+  function __wt_drawImportPreview(arr){
+    try{
+      const c = document.getElementById('wt_import_preview_c'); if(!c) return;
+      const cx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      cx.clearRect(0,0,W,H);
+      cx.fillStyle = '#111'; cx.fillRect(0,0,W,H);
+      // axes
+      cx.strokeStyle = '#303030'; cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(0, H/2); cx.lineTo(W, H/2); cx.stroke();
+      // waveform
+      if(!arr || !arr.length) return;
+      cx.beginPath();
+      cx.strokeStyle = '#6ff'; cx.lineWidth = 2;
+      for(let i=0;i<arr.length;i++){
+        const x = (i/(arr.length-1))*W;
+        const y = (0.5 - arr[i]*0.5)*H;
+        if(i===0) cx.moveTo(x,y); else cx.lineTo(x,y);
+      }
+      cx.stroke();
+    }catch(e){ console.warn('[WT] preview draw error', e); }
+  }
+  function __wt_setImportPreview(samples){
+    try{
+      if(!samples || !samples.length){ window.__WT_IMPORT_PREVIEW = null; __wt_drawImportPreview(null); return; }
+      // Sanitize → Float32Array[2048]
+      const N = 2048;
+      let a = Float32Array.from(samples);
+      // DC remove
+      let s=0; for(let i=0;i<a.length;i++) s+=a[i]; const dc = s/a.length;
+      for(let i=0;i<a.length;i++) a[i]-=dc;
+      // normalize
+      let peak=1e-9; for(let i=0;i<a.length;i++){ const mv=Math.abs(a[i]); if(mv>peak) peak=mv; }
+      if(peak>0){ const k=0.95/peak; for(let i=0;i<a.length;i++) a[i]=Math.max(-0.95, Math.min(0.95, a[i]*k)); }
+      // resample to 2048 if needed
+      if(a.length!==N){
+        const out=new Float32Array(N);
+        for(let i=0;i<N;i++){ const t=i*(a.length-1)/(N-1); const i0=t|0, i1=Math.min(a.length-1,i0+1); const f=t-i0; out[i]=a[i0]*(1-f)+a[i1]*f; }
+        a = out;
+      }
+      window.__WT_IMPORT_PREVIEW = a;
+      __wt_drawImportPreview(a);
+      const st = document.getElementById('wt_import_status'); if(st) st.textContent = 'Ready — click Export to Oscillators to save.';
+    }catch(e){ console.warn('[WT] set preview error', e); }
+  }
+  // Export preview → Oscillator menu (32 identical frames)
+  (function(){
+    const btn = document.getElementById('wt_import_export');
+    if(btn && !btn.__wtBound){
+      btn.__wtBound = true;
+      btn.addEventListener('click', ()=>{
+        try{
+          const a = window.__WT_IMPORT_PREVIEW;
+          if(!a || !a.length){ alert('Nothing to export yet. Import a PNG/WAV/CSV first.'); return; }
+          const frames = []; for(let i=0;i<32;i++) frames.push(Float32Array.from(a));
+          let nm = (document.getElementById('wt_import_name')?.value||'').trim();
+          if(!nm) nm = 'Imported ' + (new Date().toLocaleTimeString());
+          CustomWT.save(nm, frames);
+          CustomWT.refreshMenus(nm);
+          alert('Exported to Synth as "'+nm+'" (find under Custom shapes).');
+        }catch(e){ console.warn('[WT] import export error', e); alert('Export failed. See console.'); }
+      });
+    }
+  })();
+async function loadBitmap(file){
+    if(window.createImageBitmap){ try{ return await createImageBitmap(file); }catch(e){} }
+    return await new Promise((resolve,reject)=>{ const url=URL.createObjectURL(file); const img=new Image(); img.onload=()=>{ resolve(img); URL.revokeObjectURL(url); }; img.onerror=(err)=>{ reject(err); URL.revokeObjectURL(url); }; img.src=url; });
+  }
+
+  async function importPNG(file, mode){
+    const bmp = await loadBitmap(file);
+    const tmp = document.createElement('canvas');
+    tmp.width = bmp.width; tmp.height = bmp.height;
+    const cx = tmp.getContext('2d'); cx.drawImage(bmp,0,0);
+    const data = cx.getImageData(0,0,tmp.width,tmp.height).data;
+
+    if(mode==='serum'){ // rows => frames
+      const rows = tmp.height, cols = tmp.width;
+      const resCols = N;
+      const out=[];
+      for(let r=0;r<rows;r++){ const fr=new Float32Array(N); for(let k=0;k<resCols;k++){ const sx=Math.floor(k*(cols/resCols)); const idx=(r*cols+sx)*4; const gray=(data[idx]+data[idx+1]+data[idx+2])/3; fr[k] = (gray/255)*2-1; } 
+
+
+  async function importPlotPNG(file){
+    try{
+      const bmp = await loadBitmap(file);
+      const cxTmp = document.createElement('canvas').getContext('2d');
+      cxTmp.canvas.width = bmp.width; cxTmp.canvas.height = bmp.height;
+      cxTmp.drawImage(bmp,0,0);
+      const {width:W,height:H} = cxTmp.canvas;
+      const data = cxTmp.getImageData(0,0,W,H).data;
+      const resCols = 2048;
+      const arr = new Float32Array(resCols);
+      // target matplotlib default blue ~ #1f77b4
+      const tr = 0x1f, tg = 0x77, tb = 0xb4;
+      const border = Math.floor(H*0.06);
+      for(let k=0;k<resCols;k++){
+        const sx = Math.floor(k*(W/resCols));
+        let bestY = -1, bestScore = 1e9;
+        for(let y=border;y<H-border;y++){
+          const idx = (y*W + sx)*4;
+          const r=data[idx], g=data[idx+1], b=data[idx+2], a=data[idx+3];
+          if(a<10) continue;
+          // ignore almost-white background & black axis/grid
+          const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+          if(lum>250) continue; // too white
+          // distance to blue line; penalize near-gray/black
+          const dr=r-tr, dg=g-tg, db=b-tb;
+          const colorDist = (dr*dr + dg*dg + db*db);
+          const sat = Math.max(r,g,b) - Math.min(r,g,b);
+          const score = colorDist - 2.0*sat; // prefer saturated bluish pixels
+          if(score<bestScore){ bestScore=score; bestY=y; }
+        }
+        if(bestY<0) bestY = Math.floor(H/2);
+        arr[k] = ( (H/2 - bestY) / (H/2) );
+      }
+      // light smoothing
+      for(let i=1;i<resCols-1;i++){ arr[i] = (arr[i-1]+arr[i]+arr[i+1])/3; }
+      __wt_setImportPreview(arr);
+    }catch(e){ console.warn('[WT] importPlotPNG error', e); alert('Plot PNG import failed.'); }
+  }
+
+async function importWAV(file){
+    try{
+      const ab = await file.arrayBuffer();
+      const AC = window.audioCtx || window.audioContext || window.webkitAudioContext || null;
+      const ac = AC && AC.sampleRate ? AC : new (window.AudioContext||window.webkitAudioContext)();
+      const buf = await ac.decodeAudioData(ab.slice(0));
+      const len = buf.length;
+      // mixdown to mono
+      let x = new Float32Array(len);
+      const ch0 = buf.getChannelData(0);
+      if(buf.numberOfChannels > 1){
+        const ch1 = buf.getChannelData(1);
+        for(let i=0;i<len;i++){ x[i] = 0.5*(ch0[i] + ch1[i]); }
+      }else{
+        x.set(ch0);
+      }
+      // sanitize, remove DC, normalize
+      for(let i=0;i<x.length;i++){ const v = x[i]; x[i] = Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : 0; }
+      x = normalize(dcRemove(x));
+      const TARGET = N * 32; // 2048 * 32
+      // resample to 32 frames worth of samples
+      const y = (x.length === TARGET) ? x : resample1D(x, TARGET);
+      // slice into frames
+      const out = [];
+      for(let i=0;i<32;i++){
+        const s = i*N;
+        const fr = y.slice(s, s+N);
+        out.push(normalize(dcRemove(fr)));
+      }
+      // update editor state
+      __wt_setImportPreview(out && out[0]);; try{ __wt_setImportPreview(frames && frames[0]); }catch(e){} alert('WAV imported. Non-2048/32 sizes were auto-resampled and normalized.');
+    }catch(e){
+      console.warn('[WT] importWAV error', e);
+      throw e;
+    }
+  }
+zeroDC(fr); normalize(fr); out.push(fr); }
+      __wt_setImportPreview(out && out[0]);; }catch(e){}
+    } else { // line-scan: darkest path per column
+      const cols=tmp.width, rows=tmp.height, resCols=N;
+      const arr=new Float32Array(N);
+      for(let k=0;k<resCols;k++){ const sx=Math.floor(k*(cols/resCols)); let bestY=0, best=1e9; for(let y=0;y<rows;y++){ const idx=(y*cols+sx)*4; const gray=(data[idx]+data[idx+1]+data[idx+2])/3; if(gray<best){ best=gray; bestY=y; } } arr[k] = (((rows-1-bestY)/(rows-1))*2)-1; }
+      zeroDC(arr); normalize(arr); current.set(arr); drawGrid();
+    }
+  }
+
+  if(auditionB) auditionB.onclick = ()=>{ try{ const ac=window.audioCtx || new (window.AudioContext||window.webkitAudioContext)(); const g=ac.createGain(); g.gain.value=0.2; g.connect(ac.destination); const o=ac.createOscillator(); const fr = frames[frameIdx] || current;
+    const real=new Float32Array(MAX_HARM+1), imag=new Float32Array(MAX_HARM+1);
+    for(let k=1;k<=MAX_HARM;k++){ let a=0,b=0; for(let n=0;n<N;n++){ const phi=TWO_PI*k*n/N, x=fr[n]; a+=x*Math.cos(phi); b+=x*Math.sin(phi); } real[k]=(2/N)*a; imag[k]=-(2/N)*b; }
+    const pw = ac.createPeriodicWave(real, imag, {disableNormalization:true});
+    o.setPeriodicWave(pw); o.connect(g); o.start(); setTimeout(()=>{ try{o.stop()}catch(e){} }, 400);
+  }catch(e){ console.warn(e); } };
+
+  // Export and menu refresh
+  function refreshMenus(){
+    const groupLabel='Custom/Wavetables';
+    ['shape','subShape'].forEach(id=>{ const sel=document.getElementById(id); if(!sel) return; sel.querySelectorAll('optgroup[data-custom="1"]').forEach(g=>g.remove()); const og=document.createElement('optgroup'); og.setAttribute('data-custom','1'); og.label=groupLabel; Object.keys(LIB).sort().forEach(name=>{ const opt=document.createElement('option'); opt.value='custom:'+name; opt.textContent=name + (LIB[name].frames.length>1?' (WT)':''); og.appendChild(opt); }); sel.appendChild(og); });
+  }
+  if(exportB) exportB.onclick = ()=>{ const name=(nameF && nameF.value || 'CustomWave').trim(); if(!name) return; const list = frames.length?frames:[new Float32Array(current)]; const cooked=list.map(fr=>{ const arr=new Float32Array(fr); zeroDC(arr); normalize(arr); return arr; }); LIB[name]={frames:cooked, ts:Date.now()}; saveLib(); refreshMenus(); if(nameF) nameF.value=''; };
+
+  // Public helpers
+  window.CustomWaves = {
+    get(n){ return LIB[n]; },
+    names(){ return Object.keys(LIB); },
+    makePeriodicWave(ac, name, idx=0){ const item=LIB[name]; if(!item) return null; const fr=item.frames[Math.max(0, Math.min(item.frames.length-1, idx))]; if(!fr) return null;
+      const real=new Float32Array(MAX_HARM+1), imag=new Float32Array(MAX_HARM+1);
+      for(let k=1;k<=MAX_HARM;k++){ let a=0,b=0; for(let n=0;n<N;n++){ const phi=TWO_PI*k*n/N, x=fr[n]; a+=x*Math.cos(phi); b+=x*Math.sin(phi); } real[k]=(2/N)*a; imag[k]=-(2/N)*b; }
+      return ac.createPeriodicWave(real, imag, {disableNormalization:true});
+    }
+  };
+
+  // Initial draw and menu refresh
+  current.fill(0); drawGrid(); refreshMenus();
+
+  // expose import function to other helpers
+  window.__WT_EDITOR_IMPORT = importPNG;
+})();
+</script>
+
+
+<script>
+/* ========================= Custom/Wavetable — AudioWorklet Morphing Oscillator =========================
+   - Phase-continuous, 32 frames x 2048 samples
+   - Multi-resolution mipmaps per frame (downsampled by 2 with [0.25,0.5,0.25] LPF)
+   - Editor preview uses same engine
+   - CC1 (Mod Wheel) -> Morph [0..1] with ~3.5ms smoothing
+   - CSV (2048x32) + PNG import (existing) with resample/normalize/DC removal/clamp
+   - Global library, newest-first; rename/delete; menus updated under "Custom/Wavetables"
+   Non-goals: touching sequencer/AI/FX/presets/theme/orientation/voice mgmt.
+*/
+(function(){
+  if (window.__WT_V2_INSTALLED__) return; window.__WT_V2_INSTALLED__ = true;
+
+  const WT_KEY = 'stagsynth_wt_lib_v2';
+  const LEGACY_KEYS = ['stagsynth_wt_lib_v1','stagsynth_wt_lib']; // if present, we'll import
+  const MAX_FRAMES = 32, FRAME_SIZE = 2048;
+
+  // ---- Utils ----
+  const clamp=(v,min,max)=>v<min?min:v>max?max:v;
+  function dcRemove(arr){
+    let sum=0; for(let i=0;i<arr.length;i++) sum+=arr[i];
+    const mean=sum/arr.length; const out=new Float32Array(arr.length);
+    for(let i=0;i<arr.length;i++) out[i]=arr[i]-mean;
+    return out;
+  }
+  function normalize(arr){
+    let peak=0; for(let i=0;i<arr.length;i++){ const a=Math.abs(arr[i]); if(a>peak) peak=a; }
+    if(peak<1e-9) return arr.slice();
+    const k = 0.95/peak; const out=new Float32Array(arr.length);
+    for(let i=0;i<arr.length;i++) out[i]=clamp(arr[i]*k,-0.95,0.95);
+    return out;
+  }
+  function resample1D(src, newN){
+    const out=new Float32Array(newN);
+    const N=src.length;
+    for(let i=0;i<newN;i++){
+      const t = i*(N-1)/(newN-1);
+      const i0 = Math.floor(t), i1 = Math.min(N-1, i0+1);
+      const f = t - i0;
+      out[i] = src[i0]*(1-f) + src[i1]*f;
+    }
+    return out;
+  }
+  function makeMipmaps(frame){
+    // successive half-band low-pass then decimate by 2 using 0.25/0.5/0.25 FIR
+    const levels=[];
+    let cur = frame;
+    while(cur.length >= 64){
+      levels.push(cur);
+      const n = cur.length;
+      const tmp = new Float32Array(n);
+      // LPF
+      tmp[0] = 0.75*cur[0] + 0.25*cur[1];
+      for(let i=1;i<n-1;i++) tmp[i] = 0.25*cur[i-1] + 0.5*cur[i] + 0.25*cur[i+1];
+      tmp[n-1] = 0.75*cur[n-1] + 0.25*cur[n-2];
+      // decimate by 2
+      const half = new Float32Array(Math.floor(n/2));
+      for(let i=0;i<half.length;i++) half[i]=tmp[i*2];
+      cur = half;
+    }
+    if(levels[levels.length-1] !== cur) levels.push(cur);
+    return levels; // array of Float32Array (2048,1024,512,...)
+  }
+  function ensureAudio(){ return window.ensureAudio ? window.ensureAudio() : Promise.resolve(); }
+  function nowAC(){ try{ return (window.audioCtx||{}).currentTime||0; }catch{ return 0; } }
+
+  // ---- Library ----
+  function loadLib(){
+    // Try v2 first
+    let lib={};
+    try{ const raw=localStorage.getItem(WT_KEY); if(raw) lib=JSON.parse(raw)||{}; }catch(e){}
+    // Import legacy once
+    if(Object.keys(lib).length===0){
+      for(const k of LEGACY_KEYS){
+        try{
+          const raw=localStorage.getItem(k);
+          if(raw){
+            const old=JSON.parse(raw)||{};
+            // old format may be {name:{frames:[arrays]}} or similar
+            for(const nm in old){
+              if(!lib[nm] && old[nm]?.frames){
+                lib[nm]={ frames: old[nm].frames.map(f=>Array.from(f)), ts: Date.now() };
+              }
+            }
+            break;
+          }
+        }catch(e){}
+      }
+      try{ if(Object.keys(lib).length>0) localStorage.setItem(WT_KEY, JSON.stringify(lib)); }catch(e){}
+    }
+    return lib;
+  }
+  function saveLib(lib){ try{ localStorage.setItem(WT_KEY, JSON.stringify(lib)); }catch(e){} }
+  function listNamesNewestFirst(lib){ return Object.keys(lib).sort((a,b)=>(lib[b]?.ts||0)-(lib[a]?.ts||0)); }
+
+  // ---- Worklet ----
+  const WORKLET_NAME = 'morph-wavetable';
+  const WORKLET_URL = URL.createObjectURL(new Blob([
+`class MorphWTProcessor extends AudioWorkletProcessor{
+  static get parameterDescriptors(){ return [
+    { name:'frequency', defaultValue:440, minValue:0, maxValue:24000, automationRate:'a-rate' },
+    { name:'morph',     defaultValue:0,   minValue:0, maxValue:1,     automationRate:'a-rate' },
+    { name:'gain',      defaultValue:1,   minValue:0, maxValue:2,     automationRate:'k-rate' }
+  ]; }
+  constructor(){
+    super();
+    this.frames = []; // array of mip arrays per frame: [ [Float32Array(lenL0), Float32Array(lenL1), ...], ... ]
+    this.levelLens = []; // e.g., [2048,1024,512,...]
+    this.phase = 0;
+    this.sampleRate_ = sampleRate;
+    this.lastFreq = 440;
+    this.port.onmessage = (ev)=>{
+      const d = ev.data||{};
+      if(d.type==='tables'){
+        this.frames = d.frames||[];
+        this.levelLens = d.levelLens||[];
+        this.phase = 0;
+      }
+    };
+  }
+  pickLevel(freq){
+    // choose table length so that ~ >= 1 sample per period segment; heuristic: targetLen ~ sr/freq
+    const target = this.sampleRate_/Math.max(1e-6,freq);
+    let bestIdx = 0, bestLen = this.levelLens[0]||2048;
+    for(let i=0;i<this.levelLens.length;i++){
+      const L=this.levelLens[i];
+      if(Math.abs(L-target) < Math.abs(bestLen-target)){ bestLen=L; bestIdx=i; }
+      if(L<target){ bestIdx=i; break; }
+    }
+    return bestIdx;
+  }
+  process(inputs, outputs, parameters){
+    const out=outputs[0]; const ch=out[0]; if(!ch) return true;
+    if(this.frames.length===0) { for(let i=0;i<ch.length;i++) ch[i]=0; return true; }
+
+    const freq = parameters.frequency;
+    const morph = parameters.morph;
+    const gain = parameters.gain[0]||1;
+
+    const numFrames = this.frames.length;
+    const lvlLens = this.levelLens;
+
+    let phase=this.phase;
+    const sr=this.sampleRate_;
+
+    for(let i=0;i<ch.length;i++){
+      const f = (freq.length>1)?freq[i]:freq[0];
+      const m = clamp((morph.length>1)?morph[i]:morph[0],0,1);
+      const idx = m*(numFrames-1);
+      const i0 = Math.max(0, Math.min(numFrames-1, Math.floor(idx)));
+      const i1 = Math.min(numFrames-1, i0+1);
+      const frac = idx - i0;
+
+      const lvlIdx = this.pickLevel(f);
+      const table0 = this.frames[i0][lvlIdx];
+      const table1 = this.frames[i1][lvlIdx];
+      const L = table0.length|0;
+
+      // phase increment in table samples
+      const inc = f * L / sr;
+
+      // sample both frames with linear interp
+      const p0 = phase % L;
+      const j = p0|0, t = p0 - j, j1=(j+1)%L;
+      const a0 = table0[j]*(1-t) + table0[j1]*t;
+      const a1 = table1[j]*(1-t) + table1[j1]*t;
+      const s = (a0*(1-frac) + a1*frac) * gain;
+
+      ch[i]=s;
+
+      phase += inc;
+      if(phase >= L) phase -= L;
+    }
+    this.phase = phase;
+    return true;
+  }
+}
+registerProcessor('${WORKLET_NAME}', MorphWTProcessor);`
+  ],{type:'application/javascript'}));
+
+  async function ensureWorklet(){
+    await ensureAudio();
+    const ac = window.audioCtx;
+    if(!ac) throw new Error('Audio not ready');
+    if(!ac.audioWorklet) throw new Error('AudioWorklet unavailable');
+    try{ await ac.audioWorklet.addModule(WORKLET_URL); }catch(e){
+      if(!String(e).includes('already registered')) throw e;
+    }
+    return ac;
+  }
+
+  // Build node from frames (Float32Array[] of length MAX_FRAMES; will resample if needed)
+  function framesToMip(framesIn){
+    // sanitize to 32 frames of 2048 samples
+    let frames = framesIn.map(f=>{
+      const a = Float32Array.from(f);
+      const d = dcRemove(a);
+      const n = normalize(d);
+      const res = (n.length===FRAME_SIZE)?n:resample1D(n, FRAME_SIZE);
+      return res;
+    });
+    if(frames.length>MAX_FRAMES) frames = frames.slice(0,MAX_FRAMES);
+    while(frames.length<MAX_FRAMES) frames.push(frames[frames.length-1]);
+    // mipmaps
+    const mips = frames.map(makeMipmaps);
+    // collect level lengths
+    const levelLens = [];
+    mips[0].forEach(level=> levelLens.push(level.length));
+    return { mips, levelLens };
+  }
+
+  function makeNodeFromFrames(ac, freq, frames){
+    const { mips, levelLens } = framesToMip(frames);
+    const node = new AudioWorkletNode(ac, WORKLET_NAME, { numberOfOutputs:1, outputChannelCount:[1] });
+    // pack for transfer: we need an array of arrays of Float32Array. We can send as-is; structured clone will handle TypedArrays.
+    node.port.postMessage({ type:'tables', frames:mips, levelLens });
+    const freqParam = node.parameters.get('frequency');
+    const morphParam = node.parameters.get('morph');
+    const gainParam = node.parameters.get('gain');
+    if(freqParam) freqParam.value = freq||440;
+    if(morphParam) morphParam.value = window.__WT_MORPH__ ?? 0;
+    if(gainParam) gainParam.value = 1.0;
+    // Provide Oscillator-like proxy so existing voice code keeps working
+    const proxy = {
+      __node: node,
+      connect: (...a)=>node.connect(...a),
+      disconnect: (...a)=>{ try{ node.disconnect(...a) }catch(e){} },
+      start: ()=>{}, // envelope handles gating; we keep oscillator running
+      stop: (when)=>{ /* allow graceful GC */ setTimeout(()=>{ try{ node.disconnect(); }catch(e){} }, 1000); },
+      get frequency(){ return { get value(){ return freqParam?.value ?? 0; }, set value(v){ try{ freqParam?.setTargetAtTime(v, ac.currentTime, 0.003); }catch{ if(freqParam) freqParam.value=v; } } } }
+    };
+    // Register to receive morph updates
+    try{ window.CustomWT && window.CustomWT._register(proxy, morphParam, ac); }catch(e){}
+    return proxy;
+  }
+
+  // ---- Global CustomWT API ----
+  const CustomWT = {
+    _lib: loadLib(),
+    _morph: 0,
+    _nodes: new Set(),
+    _register(proxy, morphParam, ac){ this._nodes.add({proxy, morphParam, ac}); },
+    _unregister(proxy){ for(const rec of Array.from(this._nodes)){ if(rec.proxy===proxy) this._nodes.delete(rec); } },
+    getMorph(){ return this._morph; },
+    setMorph(v){
+      v = clamp(v,0,1);
+      this._morph = v;
+      const t = nowAC();
+      for(const rec of this._nodes){
+        try{ rec.morphParam?.setTargetAtTime(v, rec.ac.currentTime, 0.0035); }catch(e){}
+      }
+      // reflect UI frame slider if present
+      const fr = document.getElementById('wt_frame_idx'); const rd=document.getElementById('wt_frame_readout');
+      try{
+        if(fr && fr.max){ const N=parseInt(fr.max||'0')+1; const idx=Math.round(v*(N-1)); fr.value=String(idx); fr.dispatchEvent(new Event('input',{bubbles:true})); if(rd) rd.textContent=(idx+1)+'/'+N; }
+      }catch(e){}
+    },
+    list(){ return listNamesNewestFirst(this._lib); },
+    get(name){ return this._lib[name]; },
+    save(name, frames){
+      const nm = String(name||'Custom WT').trim() || 'Custom WT';
+      this._lib[nm] = { frames: frames.map(f=>Array.from(f)), ts: Date.now() };
+      saveLib(this._lib);
+      this.refreshMenus(nm);
+    },
+    rename(oldName, newName){
+      if(!this._lib[oldName]) return;
+      const rec=this._lib[oldName];
+      delete this._lib[oldName];
+      this._lib[newName]={...rec, ts: Date.now()};
+      saveLib(this._lib);
+      this.refreshMenus(newName);
+    },
+    delete(name){
+      delete this._lib[name]; saveLib(this._lib); this.refreshMenus();
+    },
+    refreshMenus(sel){
+      const groups = Array.from(document.querySelectorAll('optgroup[data-custom="1"]'));
+      groups.forEach(g=>{ g.innerHTML=''; });
+      const names = this.list();
+      names.forEach(nm=>{
+        const o=document.createElement('option'); o.value='custom:'+nm; o.textContent=nm;
+        groups.forEach(g=>g.appendChild(o.cloneNode(true)));
+      });
+      if(sel){
+        const sels = [document.getElementById('shape'), document.getElementById('subShape')];
+        sels.forEach(s=>{ if(!s) return; const idx = Array.from(s.options).findIndex(o=>o.value==='custom:'+sel); if(idx>=0) s.selectedIndex = idx; });
+      }
+    },
+    makeNode(ac, freq, nameOrFrames){
+      if(Array.isArray(nameOrFrames)){ return makeNodeFromFrames(ac, freq, nameOrFrames); }
+      const rec = this._lib[nameOrFrames]; if(!rec || !rec.frames) return null;
+      const frames = rec.frames.map(a=>Float32Array.from(a));
+      return makeNodeFromFrames(ac, freq, frames);
+    }
+  };
+  window.CustomWT = CustomWT;
+
+  // ---- Hook into synth voice creation via oscFactory ----
+  (function(){
+    const prevFactory = window.oscFactory;
+    window.oscFactory = function(ac, freq, type, params){
+      if(typeof type==='string' && type.startsWith('custom:')){
+        const nm = type.slice(7);
+        const node = CustomWT.makeNode(ac, freq||440, nm);
+        if(!node){ console.warn('[WT] Unknown wavetable', nm); return ac.createOscillator(); }
+        return node;
+      }
+      // fallback to previous factory or default OscillatorNode
+      if(typeof prevFactory === 'function') return prevFactory(ac, freq, type, params);
+      const o = ac.createOscillator(); o.type = (type||'sawtooth'); o.frequency.value = freq||440; return o;
+    };
+  })();
+
+  // ---- Map CC1 → morph ----
+  (function(){
+    const _onMIDI = window.onMIDI;
+    window.onMIDI = function(ev){
+      try{
+        const [st,d1,d2]=ev.data||[]; const cmd=st&0xF0;
+        if(cmd===0xB0 && (d1|0)===1){ // Mod wheel
+          const norm = (d2|0)/127;
+          CustomWT.setMorph(norm);
+        }
+      }catch(e){}
+      try{ return _onMIDI?.call(this, ev); }catch(e){}
+    };
+  })();
+
+  // ---- Editor: rewire preview to use same engine, add CSV + rename/delete UI and clearer button states ----
+  function enhanceUI(){
+    const panel=document.getElementById('customPanel'); if(!panel) return;
+
+    // Button states & focus/active
+    const style=document.createElement('style');
+    style.textContent = `
+      #customPanel .pill{position:relative; color:#eee}
+      #customPanel .pill:hover{box-shadow:0 0 0 3px rgba(255,255,255,.08) inset}
+      #customPanel .pill:active{transform:translateY(1px); opacity:.95}
+      #customPanel .pill:focus-visible{outline:2px solid #ffd34d}
+      #customPanel .pill[disabled]{opacity:.45; cursor:not-allowed}
+      #customPanel input[type="file"]::file-selector-button{ color:#eee; background:#202020; border:1px solid #444; border-radius:8px; padding:6px 10px }
+      #customPanel .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+      #wt_list{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+      #wt_list .tag{background:#1a1212; border:1px solid #3a2323; padding:4px 8px; border-radius:999px; display:flex; gap:6px; align-items:center}
+      #wt_list .tag button{ background:transparent; border:0; color:#ffb84d; cursor:pointer; padding:2px 4px; border-radius:6px }
+      #wt_list .tag button:hover{ background:#332018 }
+    
+#wt_import_png, #wt_import_csv, #wt_import_wav { display:none !important; }
+#wt_list { display:none !important; }
+
+#customPanel #wt_preview_chk, #customPanel label:has(#wt_preview_chk), #customPanel #wt_gen_morph { display:none !important; }
+
+
+#customPanel pre, #customPanel code { display:none !important; }
+#customPanel .debug, #customPanel [data-debug] { display:none !important; }
+
+.app pre, .app code {display:none !important;}`;
+    document.head.appendChild(style);
+
+    // CSV controls
+    const pngRow = panel.querySelector('#wt_import_png')?.parentElement;
+    if(pngRow){
+// WAV controls
+    if(pngRow){
+      const wavInp = document.createElement('input'); wavInp.type='file'; wavInp.id='wt_import_wav'; wavInp.accept='.wav,audio/wav,audio/x-wav';
+      const wavBtn = document.createElement('button'); wavBtn.id='wt_load_wav'; wavBtn.className='pill'; wavBtn.textContent='Import WAV';
+      pngRow.appendChild(wavInp); pngRow.appendChild(wavBtn);
+    }
+
+      const csvInp = document.createElement('input'); csvInp.type='file'; csvInp.id='wt_import_csv'; csvInp.accept='.csv,text/csv';
+      const csvBtn = document.createElement('button'); csvBtn.id='wt_load_csv'; csvBtn.className='pill'; csvBtn.textContent='Import CSV';
+      pngRow.appendChild(csvInp); pngRow.appendChild(csvBtn);
+
+    // Import Preview panel (separate from Draw/Frames)
+    let prevWrap = document.getElementById('wt_import_preview');
+    if(!prevWrap){
+      prevWrap = document.createElement('div');
+      prevWrap.id = 'wt_import_preview';
+      prevWrap.style.cssText = 'margin-top:10px;padding:8px;border:1px dashed #333;border-radius:8px;background:#0b0b0b';
+      prevWrap.innerHTML = `
+        <canvas id="wt_import_preview_c" width="560" height="120" style="width:100%;max-width:640px;height:140px;background:#151515;border-radius:8px"></canvas>
+        <div id="wt_import_status" style="margin-top:6px;color:#9aa">Waiting for import…</div>
+`;
+      pngRow.parentElement.insertBefore(prevWrap, pngRow.parentElement.firstChild);
+
+    // Reorder: place Draw Export + Name and Import Preview above import buttons
+    try{
+      const drawExportBtn = document.getElementById('wt_export');
+      const drawName = document.getElementById('wt_name');
+      const row = document.getElementById('wt_import_png')?.parentElement;
+      if(row && drawExportBtn){
+        const wrapTop = document.createElement('div');
+        wrapTop.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0';
+        if(drawName && drawName.parentElement) wrapTop.appendChild(drawName.parentElement);
+        wrapTop.appendChild(drawExportBtn);
+        row.parentElement.insertBefore(wrapTop, row);
+      }
+      const importPrev = document.getElementById('wt_import_preview');
+      if(importPrev){
+        const row = document.getElementById('wt_import_png')?.parentElement;
+        if(row) row.parentElement.insertBefore(importPrev, row);
+      }
+    }catch(e){}
+
+    }
+
+    }
+
+    // Library chips + rename/delete
+    let listDiv = document.getElementById('wt_list');
+    if(!listDiv){ listDiv = document.createElement('div'); listDiv.id='wt_list'; panel.appendChild(listDiv); }
+    function refreshList(){
+      const names = CustomWT.list(); listDiv.innerHTML='';
+      names.forEach(nm=>{
+        const tag = document.createElement('span'); tag.className='tag'; tag.innerHTML = `<strong>${nm}</strong>`;
+        const rn = document.createElement('button'); rn.textContent='rename'; rn.title='Rename';
+        const del= document.createElement('button'); del.textContent='delete'; del.title='Delete';
+        rn.onclick=()=>{
+          const nw = prompt('Rename wavetable', nm)||''.trim();
+          if(nw && nw!==nm){ CustomWT.rename(nm, nw); refreshList(); }
+        };
+        del.onclick=()=>{ if(confirm('Delete "'+nm+'"?')){ CustomWT.delete(nm); refreshList(); } };
+        tag.appendChild(rn); tag.appendChild(del); listDiv.appendChild(tag);
+      });
+    }
+    CustomWT.refreshMenus(); refreshList();
+
+    // Preview: replace original listeners
+    function getCurrentFrames(){
+      try{
+        // Reconstruct frames from thumbnails list #wt_frames (each thumb has canvas with 2048 samples stored in dataset? if not, fallback to internal buffer)
+        const thumbs = Array.from(document.querySelectorAll('#wt_frames .thumb canvas'));
+        if(thumbs.length>0 && thumbs[0].dataset && thumbs[0].dataset.samples){
+          return thumbs.map(c=>Float32Array.from(JSON.parse(c.dataset.samples||'[]')));
+        }
+      }catch(e){}
+      // fallback: if there is a builder API exposed on window (e.g., LIB_FRAMES)
+      return (window.__WT_EDIT_FRAMES__||[]).map(f=>Float32Array.from(f));
+    }
+    function setPreviewOn(on){
+      window.__WT_PREVIEW_NODE__ && (function(){
+        try{ window.__WT_PREVIEW_NODE__.disconnect(); }catch(e){};
+        window.__WT_PREVIEW_NODE__ = null;
+      })();
+      const chk=document.getElementById('wt_preview_chk');
+      if(on){
+        ensureWorklet().then(()=>{
+          const ac=window.audioCtx;
+          const frames=getCurrentFrames();
+          if(!frames || frames.length===0){ if(chk) chk.checked=false; return; }
+          const node = CustomWT.makeNode(ac, 220, frames);
+          const g = ac.createGain(); g.gain.value = 0.2; node.connect(g); g.connect(ac.destination);
+          window.__WT_PREVIEW_NODE__ = node;
+        });
+      }
+    }
+    const chk = document.getElementById('wt_preview_chk');
+    if(chk){
+      const repl = chk.cloneNode(true); chk.replaceWith(repl);
+      repl.addEventListener('change', ()=> setPreviewOn(repl.checked));
+    }
+    const frameSlider=document.getElementById('wt_frame_idx');
+    if(frameSlider){
+      const repl=frameSlider.cloneNode(true); frameSlider.replaceWith(repl);
+      repl.addEventListener('input', (e)=>{
+        const N=parseInt(repl.max||'0')+1;
+        const idx=parseInt(repl.value||'0')|0;
+        CustomWT.setMorph(N>1 ? idx/(N-1) : 0);
+      });
+    }
+
+    // Import CSV handler (expects 2048x32, no header; will resample/normalize if different)
+    const csvBtn=document.getElementById('wt_load_csv');
+    const csvInp=document.getElementById('wt_import_csv');
+    if(csvBtn && csvInp){
+      csvBtn.addEventListener('click', ()=> csvInp.click());
+      csvInp.addEventListener('change', async (e)=>{ const f=e.target.files?.[0]; if(!f) return; try{ await importCSVGeneric(f); }catch(err){ console.warn('[WT] CSV import failed', err); alert('CSV import failed.'); } }, {passive:true});
+    }
+
+    
+// Wire WAV button (safe)
+    const wavBtn=document.getElementById('wt_load_wav');
+    const wavInp=document.getElementById('wt_import_wav');
+    if(wavBtn && wavInp){
+      wavBtn.addEventListener('click', ()=> wavInp.click());
+      wavInp.addEventListener('change', async (e)=>{
+        const f=e.target.files?.[0]; if(!f) return;
+        try{ await importWAV(f); }catch(err){ console.warn('[WT] WAV import failed', err); alert('WAV import failed. See console.'); }
+      }, {passive:true});
+    }
+// Export button: ensure we capture current frames (from existing editor) and save with prompt
+    const exportBtn = document.getElementById('wt_export');
+    if(exportBtn){
+      const repl = exportBtn.cloneNode(true); exportBtn.replaceWith(repl);
+      repl.addEventListener('click', ()=>{
+        // Try to read editor-owned frames; fall back to thumbs canvases
+        let frames = (window.__WT_EDIT_FRAMES__||[]).map(f=>Float32Array.from(f));
+        if(frames.length===0){
+          try{
+            const thumbs = Array.from(document.querySelectorAll('#wt_frames .thumb canvas'));
+            if(thumbs.length>0 && thumbs[0].dataset && thumbs[0].dataset.samples){
+              frames = thumbs.map(c=>Float32Array.from(JSON.parse(c.dataset.samples||'[]')));
+            }
+          }catch(e){}
+        }
+        if(frames.length===0){ alert('No frames to export'); return; }
+        frames = frames.map(f=> normalize(dcRemove( (f.length===FRAME_SIZE)?f:resample1D(f,FRAME_SIZE) )) );
+        while(frames.length<MAX_FRAMES) frames.push(frames[frames.length-1].slice());
+        let nm = (document.getElementById('wt_name')?.value||'').trim();
+        if(!nm){ nm = prompt('Name for wavetable','Custom '+new Date().toLocaleTimeString())||'Custom WT'; }
+        CustomWT.save(nm, frames);
+        CustomWT.refreshMenus(nm);
+        alert('Exported to Synth as "'+nm+'". Find it under Custom/Wavetables.');
+        refreshList();
+      });
+    }
+  }
+
+  // Apply UI enhancements once DOM is ready
+  document.addEventListener('DOMContentLoaded', ()=>{
+    try{ enhanceUI(); }catch(e){ console.warn('[WT] UI enhance failed', e); }
+    // ensure menus reflect existing library
+    try{ CustomWT.refreshMenus(); }catch(e){}
+  });
+
+})(); // end IIFE
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', ()=>{
+  const panel=document.getElementById('customPanel');
+  if(!panel) return;
+  const ac = window.audioCtx;
+  const hasAW = !!((ac && ac.audioWorklet) || (window.AudioWorkletNode));
+  /* AW notice removed */
+});
+</script>
+
+
+<script>
+/* ========= Sequencer Step Strip Visibility Fix (isolated, no core edits) ========= */
+(function(){
+  try{
+    function ensureStripContainer(){
+      var strip = document.getElementById('seqStepsStrip');
+      var keypad = document.getElementById('keypad');
+      if(!strip){
+        strip = document.createElement('div');
+        strip.id = 'seqStepsStrip';
+        strip.style.display = 'none';
+        // place before keypad if possible
+        if(keypad && keypad.parentElement){
+          keypad.parentElement.insertBefore(strip, keypad);
+        }else{
+          (document.body || document.documentElement).prepend(strip);
+        }
+      }
+      return strip;
+    }
+
+    function buildGrid(strip, steps){
+      steps = Math.max(1, Math.min(32, steps|0 || 16));
+      if(strip.childElementCount !== steps){
+        strip.innerHTML = '';
+        for(var i=0;i<steps;i++){
+          var led = document.createElement('div');
+          led.className = 'led';
+          led.dataset.index = String(i);
+          strip.appendChild(led);
+        }
+      }
+      // basic CSS grid safety if app CSS failed to apply
+      strip.style.display = 'grid';
+      strip.style.gridTemplateColumns = 'repeat(' + steps + ', 1fr)';
+      strip.style.gap = strip.style.gap || '5px';
+    }
+
+    function currentSteps(){
+      var el = document.getElementById('seq_steps');
+      var v = el ? parseInt(el.value||'16',10) : 16;
+      return (isFinite(v) ? v : 16);
+    }
+
+    function refresh(){
+      var strip = ensureStripContainer();
+      var on = (document.getElementById('seqToggle')?.getAttribute('aria-pressed') === 'true');
+      if(on){
+        strip.style.display = 'grid';
+        buildGrid(strip, currentSteps());
+      }else{
+        strip.style.display = 'none';
+      }
+      try{ if(window.updateSeqGridForSteps) window.updateSeqGridForSteps(); }catch(e){}
+      try{ if(window.renderHighlights) window.renderHighlights(0,false); }catch(e){}
+    }
+
+    document.addEventListener('DOMContentLoaded', function(){
+      ensureStripContainer();
+      refresh();
+
+      // Hook the Sequencer toggle safely
+      var t = document.getElementById('seqToggle');
+      if(t && !t.__wtSeqFix){
+        t.__wtSeqFix = true;
+        t.addEventListener('click', function(){ setTimeout(refresh, 0); }, {passive:true});
+      }
+
+      // React to step count changes
+      var steps = document.getElementById('seq_steps');
+      if(steps && !steps.__wtSeqFix){
+        steps.__wtSeqFix = true;
+        steps.addEventListener('input', function(){ setTimeout(refresh, 0); }, {passive:true});
+        steps.addEventListener('change', function(){ setTimeout(refresh, 0); }, {passive:true});
+      }
+
+      // Also listen to custom events your app already emits
+      window.addEventListener('audio:ready', refresh);
+      window.addEventListener('rebuild:keypad', refresh);
+    });
+  }catch(e){
+    console.warn('[SeqFix] Failed to install strip fixer:', e);
+  }
+})();
+</script>
+
+
+<script>
+/* === Tiny patch: ensure original Clear button binding is installed === */
+(function(){
+  function ensureOriginalClearBinding(){
+    try{ if (window.ensureStrip) window.ensureStrip(); }catch(e){}
+  }
+  document.addEventListener('DOMContentLoaded', ensureOriginalClearBinding);
+  window.addEventListener('audio:ready', ensureOriginalClearBinding);
+  window.addEventListener('rebuild:keypad', ensureOriginalClearBinding);
+})();
+</script>
+
+
+<script>
+/* === Sequencer Clear button bridge: forwards visible #seqClearBtn to original #seq_clear === */
+(function(){
+  function install(){
+    var vis = document.getElementById('seqClearBtn');
+    var orig = document.getElementById('seq_clear');
+    if(!vis || !orig || vis.__clearBridge) return;
+    vis.__clearBridge = true;
+    vis.addEventListener('click', function(ev){
+      try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+      try{ orig.click(); }catch(e){}
+    }, {passive:false});
+  }
+  document.addEventListener('DOMContentLoaded', install);
+  window.addEventListener('audio:ready', install);
+  window.addEventListener('rebuild:keypad', install);
+})();
+</script>
+
+
+<script>
+// === Group Frame slider + Frames pane with Draw ===
+(function(){
+  try{
+    const cvs = document.getElementById('wt_canvas');
+    const panel = document.getElementById('customPanel');
+    const frames = document.getElementById('wt_frames');
+    const slider = document.getElementById('wt_frame_idx');
+    const readout = document.getElementById('wt_frame_readout');
+    const sliderWrap = slider ? slider.parentElement : null;
+    if(cvs && panel && (frames || sliderWrap)){
+      // Build a compact group
+      const grp = document.createElement('div');
+      grp.id = 'wt_draw_frames_group';
+      grp.style.cssText = 'margin-top:8px;display:grid;grid-template-columns:1fr;gap:8px;align-items:start';
+      // slider row
+      if(sliderWrap){
+        const row = document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+        row.appendChild(sliderWrap);
+        if(readout) row.appendChild(readout);
+        grp.appendChild(row);
+      }
+      // frames pane
+      if(frames) grp.appendChild(frames);
+      // insert right after the canvas container
+      const cvWrap = cvs.parentElement;
+      if(cvWrap && cvWrap.parentElement){
+        cvWrap.parentElement.insertBefore(grp, cvWrap.nextSibling);
+      }else{
+        panel.insertBefore(grp, panel.firstChild);
+      }
+    }
+  }catch(e){ console.warn('[WT] reorder frames group error', e); }
+})();
+</script>
+
+
+<script>
+(function(){
+  try{
+    const panel = document.getElementById('customPanel');
+    if(!panel) return;
+    // Hide library name chips & any helper notes
+    const list = document.getElementById('wt_list');
+    if(list) list.style.display='none';
+    // Remove small paragraphs that mention routing into oscillators
+    panel.querySelectorAll('div, p, small, span').forEach(el=>{
+      const t = (el.textContent||'').toLowerCase();
+      if(t && t.length<260 && /routing|oscillator menu|shape dropdown|flows into/i.test(t)){
+        el.remove();
+      }
+    });
+  }catch(e){}
+})();
+</script>
+
+
+<script>
+(function(){
+  try{
+    const a = document.getElementById('wt_export'); if (a) a.textContent = 'Export to Oscs';
+    const b = document.getElementById('wt_import_export'); if (b) b.textContent = 'Export to Oscs';
+  }catch(e){}
+})();
+</script>
+
+
+<script>
+(function(){
+  try{
+    const pngInp = document.getElementById('wt_import_png');
+    const csvInp = document.getElementById('wt_import_csv');
+    const wavInp = document.getElementById('wt_import_wav');
+    const nameF = document.getElementById('wt_import_name');
+    const expB = document.getElementById('wt_import_export');
+    if(!pngInp || !expB || !nameF) return;
+    const row = pngInp.parentElement; // the row that also holds the PNG/CSV/WAV buttons
+    if(!row || !row.parentElement) return;
+    // Build a new row after the import buttons row
+    let outRow = document.getElementById('wt_import_export_row');
+    if(!outRow){
+      outRow = document.createElement('div');
+      outRow.id = 'wt_import_export_row';
+      outRow.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px';
+      row.parentElement.insertBefore(outRow, row.nextSibling);
+    }
+    // Move the Name field's whole label (if wrapped), else move the input
+    const nameWrap = nameF.parentElement && nameF.parentElement.tagName.toLowerCase()==='label' ? nameF.parentElement : nameF;
+    if (nameWrap && nameWrap.parentElement) outRow.appendChild(nameWrap);
+    outRow.appendChild(expB);
+  }catch(e){ console.warn('[WT] move import export row failed', e); }
+})();
+</script>
+
+<script>
+async function importCSVGeneric(file){
+    const txt = await file.text();
+    const lines = txt.trim().split(/\r?\n/).filter(Boolean);
+    const rows = lines.map(line => line.split(/[,;\s]+/).map(Number).filter(v=>Number.isFinite(v))).filter(r=>r.length>0);
+    if(rows.length===0){ alert('CSV contained no numeric data.'); return; }
+    // Choose the column with the largest variance (assume that is the waveform column)
+    const cols = Math.max(...rows.map(r=>r.length));
+    const series = [];
+    for(let c=0;c<cols;c++){
+      const col=[];
+      for(const r of rows){ if(r.length>c) col.push(r[c]); }
+      if(col.length>0) series.push(col);
+    }
+    let bestIdx = 0, bestVar = -1;
+    for(let i=0;i<series.length;i++){
+      const a=series[i]; let s=0; for(const v of a) s+=v; const mu=s/a.length;
+      let v=0; for(const x of a){ const d=x-mu; v+=d*d; } v/=a.length;
+      if(v>bestVar){ bestVar=v; bestIdx=i; }
+    }
+    let y = Float32Array.from(series[bestIdx] || series[0]);
+    // Resample to 2048
+    const N = 2048;
+    if(y.length!==N){
+      const out = new Float32Array(N);
+      for(let i=0;i<N;i++){ const t=i*(y.length-1)/(N-1); const i0=t|0, i1=Math.min(y.length-1,i0+1); const f=t-i0; out[i]=y[i0]*(1-f)+y[i1]*f; }
+      y = out;
+    }
+    // DC remove + normalize
+    let s=0; for(let i=0;i<y.length;i++) s+=y[i]; const dc=s/y.length; for(let i=0;i<y.length;i++) y[i]-=dc;
+    let peak=1e-9; for(let i=0;i<y.length;i++){ const a=Math.abs(y[i]); if(a>peak) peak=a; }
+    const k = peak>0 ? 0.95/peak : 1; for(let i=0;i<y.length;i++) y[i]=Math.max(-0.95, Math.min(0.95, y[i]*k));
+    // Update preview; do not auto-save
+    __wt_setImportPreview(y);
+    const st = document.getElementById('wt_import_status'); if(st) st.textContent = 'CSV parsed — review preview then Export.';
+  }
+</script>
+
+<!-- WT Overlay: styles -->
+<style id="wt_overlay_css">
+:root{
+  --wt-bg:#0b0e12; --wt-fg:#e8eef7; --wt-sub:#a9b7c6; --wt-accent:#5cc8ff;
+  --wt-panel:#131923; --wt-line:#223142; --wt-chip:#0f141b; --wt-ok:#3ddc97; --wt-warn:#ffca3a; --wt-err:#ff595e;
+}
+.wt-hidden{display:none}
+.wt-overlay{position:fixed;inset:0;display:none;z-index:999999}
+.wt-overlay[aria-hidden="false"]{display:block}
+.wt-mask{position:absolute;inset:0;background:rgba(0,0,0,.5);backdrop-filter:saturate(0.8) blur(1.5px)}
+.wt-panel{position:absolute;right:0;top:0;bottom:0;width:min(100%,1000px);background:var(--wt-panel);border-left:1px solid var(--wt-line);box-shadow:-8px 0 24px rgba(0,0,0,.35);display:flex;flex-direction:column;color:var(--wt-fg);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+.wt-head{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--wt-line);background:#0f1620}
+.wt-title{font-size:13px;letter-spacing:.25px}
+.wt-body{padding:14px;overflow:auto}
+.wt-pill{padding:8px 12px;border-radius:999px;border:1px solid var(--wt-line);background:var(--wt-chip);color:var(--wt-fg);cursor:pointer}
+.wt-pill[aria-pressed="true"]{background:#0b1922;border-color:#203545;box-shadow:0 0 0 1px #1f3b52 inset;color:#bfeaff}
+.wt-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.wt-tag{font-size:12px;color:#8ea1b3;padding:2px 8px;border:1px solid var(--wt-line);border-radius:999px;background:#0e141b}
+.wt-status{font-size:13px;color:#b2c7da}
+.wt-status.ok{color:var(--wt-ok)} .wt-status.warn{color:var(--wt-warn)} .wt-status.err{color:var(--wt-err)}
+.wt-input{background:#0b0f14;border:1px solid var(--wt-line);border-radius:8px;color:#e8eef7;padding:8px 10px}
+.wt-radio{display:inline-flex;gap:6px;align-items:center;padding:4px 8px;border:1px solid var(--wt-line);border-radius:999px;background:#0b0f14}
+.wt-tiny{font-size:12px;color:#9cb2c6}
+canvas.wt-main{width:100%;height:280px;border-radius:8px;background:#0b0f14;border:1px solid var(--wt-line);touch-action:none}
+canvas.wt-thumb{width:96px;height:48px;border-radius:6px;background:#0b0f14;border:1px solid var(--wt-line);cursor:pointer}
+.wt-thumbs{display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow:auto;padding:8px;border:1px dashed var(--wt-line);border-radius:8px;background:#0b0f14}
+.wt-thumbs .wt-thumb[data-active="true"]{outline:2px solid var(--wt-accent);}
+.wt-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.wt-fab{position:fixed;right:16px;bottom:16px;z-index:999998;background:#0f141b;border:1px solid var(--wt-line);color:#cfe8ff;border-radius:999px;padding:10px 12px;font-weight:700;letter-spacing:.3px;cursor:pointer}
+</style>
+
+<!-- WT Overlay: markup -->
+<div class="wt-overlay" id="wt_overlay" aria-hidden="true">
+  <div class="wt-mask" id="wt_mask"></div>
+  <div class="wt-panel" role="dialog" aria-modal="true" aria-labelledby="wt_title">
+    <div class="wt-head">
+      <div class="wt-bar">
+        <strong id="wt_title" class="wt-title">Custom / Wavetable Editor <span class="wt-tag">WT v4.0</span></strong>
+        <span id="wt_import_status" class="wt-status">Ready</span>
+      </div>
+      <div class="wt-bar">
+        <button id="wt_close" class="wt-pill">Close</button>
+      </div>
+    </div>
+
+    <div class="wt-body">
+      <div class="wt-bar" style="margin-bottom:8px">
+        <strong>Tool</strong>
+        <button class="wt-pill" id="t_pencil" aria-pressed="true">Pencil</button>
+        <button class="wt-pill" id="t_line">Line</button>
+        <button class="wt-pill" id="t_erase">Erase</button>
+        <button class="wt-pill" id="t_smooth">Smooth</button>
+        <button class="wt-pill" id="t_invert">Invert</button>
+        <button class="wt-pill" id="t_zero">Zero DC</button>
+        <button class="wt-pill" id="t_norm">Normalize</button>
+        <button class="wt-pill" id="t_loop">Make Seamless</button>
+        <button class="wt-pill" id="t_clear">Clear</button>
+      </div>
+
+      <div class="wt-bar" style="margin-bottom:10px">
+        <label>Brush</label>
+        <input id="brush" type="range" min="1" max="64" value="8">
+        <label>Grid</label>
+        <select id="grid">
+          <option value="0">Off</option>
+          <option>4</option><option>8</option><option>16</option><option selected>32</option><option>64</option>
+        </select>
+        <label><input type="checkbox" id="snap" checked> Snap</label>
+        <label><input type="checkbox" id="sym"> Symmetry</label>
+      </div>
+
+      <canvas id="wt_canvas" class="wt-main" width="1024" height="512"></canvas>
+
+      <div class="wt-bar" style="margin-top:8px">
+        <span class="wt-radio">
+          <label><input type="radio" name="aud" value="periodic" checked> Periodic</label>
+          <label><input type="radio" name="aud" value="freerun"> Free‑run</label>
+        </span>
+        <button class="wt-pill" id="audition">Audition</button>
+        <label>Freq</label>
+        <input id="aud_freq" type="range" min="30" max="1200" step="1" value="220">
+        <span class="wt-tag" id="pitch_ref">Free‑run reference: 220 Hz</span>
+        <button class="wt-pill" id="export">Export to Oscs</button>
+        <input class="wt-input" id="export_name" placeholder="Name for export…" style="min-width:220px">
+      </div>
+      <div class="wt-tiny">Free‑run (WAV/CSV) follows the frequency slider via playbackRate; Periodic uses true oscillator frequency for single‑cycle audition.</div>
+
+      <div class="wt-grid2" style="margin-top:14px">
+        <div>
+          <label class="wt-tiny">Import CSV / WAV</label>
+          <input class="wt-input" type="file" id="imp_file" accept=".csv,.wav">
+          <div class="wt-bar" style="margin-top:8px">
+            <button class="wt-pill" id="add_frame">Add as Frame</button>
+            <button class="wt-pill" id="replace_frame">Replace Frame</button>
+            <button class="wt-pill" id="del_frame">Delete Frame</button>
+          </div>
+          <div class="wt-bar" style="margin-top:8px">
+            <label>Frame</label>
+            <input id="frame_idx" type="range" min="0" max="31" step="1" value="0">
+            <span id="frame_label" class="wt-tag">0 / 32</span>
+          </div>
+        </div>
+        <div>
+          <label class="wt-tiny">Import Preview</label>
+          <canvas id="wt_import_preview_c" width="512" height="128" style="width:100%;height:128px;border-radius:8px;background:#0b0f14;border:1px solid var(--wt-line)"></canvas>
+          <div class="wt-bar" style="margin-top:8px">
+            <button class="wt-pill" id="use_preview">Use as Current</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="wt-tiny">Frames <span class="wt-tag">max 32</span></div>
+        <div id="thumbs" class="wt-thumbs"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<button id="wt_fab" class="wt-fab" title="Open Custom/Wavetable">WT</button>
+
+<!-- WT Overlay: script -->
+<script>
+(function(){
+'use strict';
+/* ===== Collapsible behavior (safe global API) ===== */
+const overlay = document.getElementById('wt_overlay');
+const mask = document.getElementById('wt_mask');
+const closeBtn = document.getElementById('wt_close');
+const fab = document.getElementById('wt_fab');
+function openPanel(){ overlay.setAttribute('aria-hidden','false'); }
+function closePanel(){ overlay.setAttribute('aria-hidden','true'); }
+closeBtn.addEventListener('click', closePanel);
+mask.addEventListener('click', closePanel);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && overlay.getAttribute('aria-hidden')==='false'){ closePanel(); }});
+fab.addEventListener('click', openPanel);
+
+// Try to bind to an existing "Custom/Wavetable" button in your UI:
+function autoBindOpener(){
+  const candidates = Array.from(document.querySelectorAll('button,[role="button"],.btn,.menu-item,a'))
+    .filter(el=>{
+      const t = (el.textContent||'').toLowerCase();
+      return t.includes('custom') && t.includes('wavetable');
+    });
+  candidates.forEach(el=>{
+    if(!el.dataset.wtBound){
+      el.dataset.wtBound = "1";
+      el.addEventListener('click', ()=> openPanel());
+    }
+  });
+}
+autoBindOpener();
+setTimeout(autoBindOpener, 1000); // in case your UI renders async
+
+// Expose public API
+window.__WT_openPanel = openPanel;
+
+/* ===== Wavetable core (no PNG) ===== */
+const N = 2048, MAX_FRAMES = 32;
+let frames=[new Float32Array(N).fill(0)], current=0;
+
+// Free‑run buffers
+let AUD_FULL=null, AUD_SR=null, AUD_ABUF=null;
+
+const clamp1=(x)=>Math.max(-1,Math.min(1,x));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function normalize(buf){ let m=0; for(let i=0;i<buf.length;i++){ const v=Math.abs(buf[i]); if(v>m) m=v; } if(m>0){ const k=1/m; for(let i=0;i<buf.length;i++) buf[i]*=k; } return buf; }
+function dcRemove(buf){ let mu=0; for(let i=0;i<buf.length;i++) mu+=buf[i]; mu/=buf.length; for(let i=0;i<buf.length;i++) buf[i]-=mu; return buf; }
+function resample1D(a, newLen){ const out=new Float32Array(newLen); if(a.length===newLen){ out.set(a); return out; } for(let i=0;i<newLen;i++){ const t=i*(a.length-1)/(newLen-1); const i0=Math.floor(t), i1=Math.min(a.length-1,i0+1); const f=t-i0; out[i]=(1-f)*a[i0]+f*a[i1]; } return out; }
+
+function drawWaveToCanvas(ctx, buf, color='#bfeaff', bgGrid=true){
+  const W=ctx.canvas.width, H=ctx.canvas.height;
+  ctx.clearRect(0,0,W,H); ctx.fillStyle='#0b0f14'; ctx.fillRect(0,0,W,H);
+  if(bgGrid){
+    ctx.strokeStyle='#15202a'; ctx.lineWidth=1; ctx.beginPath();
+    ctx.moveTo(0,H*0.5); ctx.lineTo(W,H*0.5);
+    const gridDiv=parseInt(document.getElementById('grid').value||'0',10);
+    if(gridDiv>0){ for(let i=1;i<gridDiv;i++){ const x=(i/gridDiv)*W; ctx.moveTo(x,0); ctx.lineTo(x,H); } }
+    ctx.stroke();
+  }
+  ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
+  for(let i=0;i<buf.length;i++){ const x=(i/(buf.length-1))*W; const y=(0.5-0.5*buf[i])*H; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+  ctx.stroke();
+}
+function makeThumb(buf){ const c=document.createElement('canvas'); c.width=256; c.height=128; c.className='wt-thumb'; drawWaveToCanvas(c.getContext('2d'), resample1D(buf,512), '#8fd0ff', true); return c; }
+function refreshThumbs(){ const cont=document.getElementById('thumbs'); cont.innerHTML=''; frames.forEach((fr,idx)=>{ const t=makeThumb(fr); t.dataset.index=String(idx); t.dataset.active=(idx===current)?'true':'false'; t.addEventListener('click',()=>{ safeCommit(); current=idx; ensureFrame(current); editorBuf.set(frames[current]); paintEditor(); refreshThumbs(); updateFrameLabel(); }); cont.appendChild(t); }); }
+function updateFrameLabel(){ document.getElementById('frame_label').textContent=`${current} / ${MAX_FRAMES}`; }
+
+/* ===== Editor ===== */
+const cvs=document.getElementById('wt_canvas'), ctx=cvs.getContext('2d');
+const editorBuf=new Float32Array(N); editorBuf.set(frames[current]);
+let dragging=false, tool='pencil', lastPos=null, lineStart=null;
+
+function canvasToIndexAndValue(ev){ const rect=cvs.getBoundingClientRect(); const px=(ev.clientX-rect.left)*(cvs.width/rect.width); const py=(ev.clientY-rect.top)*(cvs.height/rect.height); const ix=Math.max(0,Math.min(N-1,Math.round(px/cvs.width*(N-1)))); const v=clamp1((0.5-py/cvs.height)*2); return {ix,v}; }
+function applyPencil(ix,v){ const brush=Math.max(1,Math.floor(parseInt(document.getElementById('brush').value,10))); const sym=document.getElementById('sym').checked; const half=Math.floor(brush/2); for(let o=-half;o<=half;o++){ const j=Math.max(0,Math.min(N-1,ix+o)); editorBuf[j]=v; if(sym){ const jm=(N-1)-j; editorBuf[jm]=-v; } } }
+function applyErase(ix){ const brush=Math.max(1,Math.floor(parseInt(document.getElementById('brush').value,10))); const sym=document.getElementById('sym').checked; const half=Math.floor(brush/2); for(let o=-half;o<=half;o++){ const j=Math.max(0,Math.min(N-1,ix+o)); editorBuf[j]=0; if(sym){ const jm=(N-1)-j; editorBuf[jm]=0; } } }
+function applyLine(ix0,v0,ix1,v1){ const snap=document.getElementById('snap').checked, grid=parseInt(document.getElementById('grid').value||'0',10); if(snap&&grid>0){ const step=Math.round((N-1)/grid); ix0=Math.round(ix0/step)*step; ix1=Math.round(ix1/step)*step; } if(ix1<ix0){ let t=ix0; ix0=ix1; ix1=t; t=v0; v0=v1; v1=t; } const len=Math.max(1,ix1-ix0); for(let k=0;k<=len;k++){ const ix=ix0+k, t=k/len, v=lerp(v0,v1,t); editorBuf[ix]=v; } }
+function paintEditor(){ drawWaveToCanvas(ctx, editorBuf, '#bfeaff', true); }
+
+cvs.addEventListener('pointerdown',e=>{ dragging=true; lastPos=canvasToIndexAndValue(e); if(tool==='line'){ lineStart=lastPos; } else if(tool==='pencil'){ applyPencil(lastPos.ix,lastPos.v); paintEditor(); } else if(tool==='erase'){ applyErase(lastPos.ix); paintEditor(); } if(cvs.setPointerCapture&&e.pointerId!==undefined){ try{ cvs.setPointerCapture(e.pointerId);}catch(_){}}});
+cvs.addEventListener('pointermove',e=>{ if(!dragging) return; const cur=canvasToIndexAndValue(e); if(tool==='pencil'){ const ix0=Math.min(lastPos.ix,cur.ix), ix1=Math.max(lastPos.ix,cur.ix), len=Math.max(1,ix1-ix0); for(let k=0;k<=len;k++){ const ix=ix0+k, t=(len? k/len:0), v=lerp(lastPos.v,cur.v,t); applyPencil(ix,v); } lastPos=cur; paintEditor(); } else if(tool==='erase'){ const ix0=Math.min(lastPos.ix,cur.ix), ix1=Math.max(lastPos.ix,cur.ix); for(let ix=ix0; ix<=ix1; ix++) applyErase(ix); lastPos=cur; paintEditor(); } else if(tool==='line'){ paintEditor(); const tctx=ctx; tctx.save(); tctx.globalAlpha=0.65; tctx.strokeStyle='#89bde6'; tctx.lineWidth=2; tctx.beginPath(); const x0=(lineStart.ix/(N-1))*cvs.width, y0=(0.5-0.5*lineStart.v)*cvs.height; const x1=(cur.ix/(N-1))*cvs.width, y1=(0.5-0.5*cur.v)*cvs.height; tctx.moveTo(x0,y0); tctx.lineTo(x1,y1); tctx.stroke(); tctx.restore(); } });
+['pointerup','pointercancel','pointerleave'].forEach(ev=>cvs.addEventListener(ev, e=>{ if(!dragging) return; if(tool==='line' && lineStart){ const cur=canvasToIndexAndValue(e); applyLine(lineStart.ix,lineStart.v,cur.ix,cur.v); paintEditor(); } dragging=false; lastPos=null; lineStart=null; }));
+
+const t_pencil=document.getElementById('t_pencil'), t_line=document.getElementById('t_line'), t_erase=document.getElementById('t_erase');
+const t_smooth=document.getElementById('t_smooth'), t_invert=document.getElementById('t_invert'), t_zero=document.getElementById('t_zero');
+const t_norm=document.getElementById('t_norm'), t_loop=document.getElementById('t_loop'), t_clear=document.getElementById('t_clear');
+function setTool(id){ tool=id; [t_pencil,t_line,t_erase,t_smooth,t_invert,t_zero,t_norm,t_loop,t_clear].forEach(el=>{ if(el) el.setAttribute('aria-pressed', String(el.id==='t_'+id)); }); }
+t_pencil.addEventListener('click',()=>setTool('pencil')); t_line.addEventListener('click',()=>setTool('line')); t_erase.addEventListener('click',()=>setTool('erase'));
+t_smooth.addEventListener('click',()=>{ const tmp=new Float32Array(editorBuf); for(let p=0;p<2;p++){ for(let i=1;i<N-1;i++){ tmp[i]=(editorBuf[i-1]+editorBuf[i]+editorBuf[i+1])/3; } tmp[0]=(editorBuf[0]+editorBuf[1])*0.5; tmp[N-1]=(editorBuf[N-2]+editorBuf[N-1])*0.5; editorBuf.set(tmp); } paintEditor(); });
+t_invert.addEventListener('click',()=>{ for(let i=0;i<N;i++) editorBuf[i]=-editorBuf[i]; paintEditor(); });
+t_zero.addEventListener('click',()=>{ dcRemove(editorBuf); paintEditor(); });
+t_norm.addEventListener('click',()=>{ normalize(editorBuf); paintEditor(); });
+t_loop.addEventListener('click',()=>{ const xfade=48; for(let i=0;i<xfade;i++){ const a=editorBuf[N-xfade+i], b=editorBuf[i]; const t=i/(xfade-1); const wa=Math.cos(0.5*Math.PI*t), wb=Math.sin(0.5*Math.PI*t); const v=wa*a+wb*b; editorBuf[i]=v; editorBuf[N-xfade+i]=v; } dcRemove(editorBuf); paintEditor(); });
+t_clear.addEventListener('click',()=>{ editorBuf.fill(0); paintEditor(); });
+document.getElementById('grid').addEventListener('change',()=>paintEditor());
+
+/* ===== Frame ops ===== */
+const addB=document.getElementById('add_frame'), repB=document.getElementById('replace_frame'), delB=document.getElementById('del_frame'), frameIdx=document.getElementById('frame_idx');
+function ensureFrame(i){ if(i<0||i>=MAX_FRAMES) return; if(!frames[i]) frames[i]=new Float32Array(N); }
+function safeCommit(){ if(current<0||current>=MAX_FRAMES) return; ensureFrame(current); frames[current].set(editorBuf); }
+addB.addEventListener('click',()=>{ if(frames.length>=MAX_FRAMES){ flashStatus('Frame limit reached','warn'); return; } safeCommit(); const copy=new Float32Array(editorBuf); frames.splice(current+1,0,copy); current++; editorBuf.set(copy); frameIdx.value=String(current); refreshThumbs(); updateFrameLabel(); paintEditor(); });
+repB.addEventListener('click',()=>{ safeCommit(); refreshThumbs(); paintEditor(); flashStatus('Frame replaced','ok'); });
+delB.addEventListener('click',()=>{ if(frames.length<=1){ frames[0].fill(0); editorBuf.fill(0); paintEditor(); refreshThumbs(); return; } frames.splice(current,1); current=Math.max(0, Math.min(current, frames.length-1)); ensureFrame(current); editorBuf.set(frames[current]); frameIdx.value=String(current); refreshThumbs(); updateFrameLabel(); paintEditor(); });
+frameIdx.addEventListener('input',()=>{ const idx=Math.max(0, Math.min(MAX_FRAMES-1, parseInt(frameIdx.value,10)||0)); safeCommit(); current=idx; ensureFrame(current); editorBuf.set(frames[current]); updateFrameLabel(); refreshThumbs(); paintEditor(); });
+
+/* ===== Import (CSV/WAV only) ===== */
+const st=document.getElementById('wt_import_status');
+function flashStatus(msg, cls=''){ st.className='wt-status '+cls; st.textContent=msg; clearTimeout(flashStatus._t); flashStatus._t=setTimeout(()=>{ st.className='wt-status'; st.textContent='Ready'; }, 2500); }
+
+const impF=document.getElementById('imp_file'), usePrev=document.getElementById('use_preview');
+const prevC=document.getElementById('wt_import_preview_c'), prevCtx=prevC.getContext('2d');
+let IMPORT_PREVIEW=null;
+function __wt_setImportPreview(buf){ if(buf){ drawWaveToCanvas(prevCtx, resample1D(buf,1024), '#7fe0a6', true); flashStatus('Preview ready','ok'); } else { prevCtx.clearRect(0,0,prevC.width, prevC.height); } }
+usePrev.addEventListener('click',()=>{ editorBuf.set(IMPORT_PREVIEW || editorBuf); paintEditor(); });
+
+impF.addEventListener('change', async ()=>{
+  const f=impF.files && impF.files[0]; if(!f) return;
+  const name=(f.name||'').toLowerCase(); AUD_FULL=null; AUD_SR=null; AUD_ABUF=null;
+  try{
+    if(name.endsWith('.csv')){
+      const txt=await f.text();
+      let srGuess=44100, ys=[], lines=txt.trim().split(/\r?\n/);
+      if(lines[0].includes('t') && lines[0].includes(',')){
+        let times=[], vals=[]; for(let i=1;i<lines.length;i++){ const p=lines[i].split(','); if(p.length>=2){ const t=parseFloat(p[0]), v=parseFloat(p[1]); if(Number.isFinite(t)&&Number.isFinite(v)){ times.push(t); vals.push(v); } } }
+        if(times.length>2){ const dts=[]; for(let i=1;i<times.length;i++) dts.push(times[i]-times[i-1]); dts.sort((a,b)=>a-b); const med=dts[Math.floor(dts.length/2)]; if(med>0) srGuess=Math.round(1/med); }
+        ys=vals;
+      }else{ ys = txt.split(/[, \t\r\n]+/).map(Number).filter(Number.isFinite); }
+      AUD_FULL=new Float32Array(ys); AUD_SR=srGuess;
+      IMPORT_PREVIEW=resample1D(AUD_FULL,N); dcRemove(IMPORT_PREVIEW); normalize(IMPORT_PREVIEW); __wt_setImportPreview(IMPORT_PREVIEW);
+      document.querySelector('input[name="aud"][value="freerun"]').checked=true;
+      flashStatus(`CSV imported, sr≈${srGuess} Hz; Free‑run selected`,'ok');
+    }else if(name.endsWith('.wav')){
+      const ac=new (window.AudioContext||window.webkitAudioContext)();
+      const arr=new Uint8Array(await f.arrayBuffer());
+      const ab=await ac.decodeAudioData(arr.buffer.slice(arr.byteOffset, arr.byteOffset+arr.byteLength));
+      AUD_ABUF=ab; AUD_SR=ab.sampleRate; AUD_FULL=new Float32Array(ab.getChannelData(0));
+      IMPORT_PREVIEW=resample1D(AUD_FULL,N); dcRemove(IMPORT_PREVIEW); normalize(IMPORT_PREVIEW); __wt_setImportPreview(IMPORT_PREVIEW);
+      document.querySelector('input[name="aud"][value="freerun"]').checked=true;
+      flashStatus(`WAV imported, ${AUD_SR} Hz; Free‑run selected`,'ok');
+    }else{
+      flashStatus('Unsupported file type','err');
+    }
+  }catch(e){ console.warn('Import error',e); flashStatus('Import failed: '+(e && e.message || e),'err'); }
+  finally{ impF.value=''; }
+});
+
+/* ===== Audition (pitch-follow Free‑run; FFT Periodic) ===== */
+const auditionB=document.getElementById('audition'), audFreq=document.getElementById('aud_freq');
+const pitchRefEl=document.getElementById('pitch_ref');
+let __audCtx=null, __audSrc=null, __audGain=null, __audMode=null, __audRefHz=220;
+async function ensureCtx(){ if(!__audCtx){ __audCtx=new (window.AudioContext||window.webkitAudioContext)(); } if(__audCtx.state==='suspended'){ try{ await __audCtx.resume(); }catch(e){} } return __audCtx; }
+function stopAudition(){ try{ if(__audSrc){ __audSrc.stop(); __audSrc.disconnect(); } if(__audGain){ __audGain.disconnect(); } }catch(e){} __audSrc=null; __audGain=null; __audMode=null; }
+function WT_fftToPeriodicWave(ac, wave, f0){ const nyq=ac.sampleRate*0.5, kmax=Math.max(1,Math.min(Math.floor(nyq/Math.max(1e-3,f0)), Math.floor(N/2)-1)); const real=new Float32Array(kmax+1), imag=new Float32Array(kmax+1); for(let k=1;k<=kmax;k++){ let a=0,b=0; for(let n=0;n<N;n++){ const phi=2*Math.PI*k*n/N, x=wave[n]; a+=x*Math.cos(phi); b-=x*Math.sin(phi); } real[k]=(2/N)*a; imag[k]=(2/N)*b; } return ac.createPeriodicWave(real,imag,{disableNormalization:true}); }
+function computeRMS(y){ let s=0; for(let i=0;i<y.length;i++) s+=y[i]*y[i]; return Math.sqrt(s/Math.max(1,y.length)); }
+
+auditionB.addEventListener('click', async ()=>{
+  stopAudition();
+  try{
+    const ac = await ensureCtx();
+    const mode = document.querySelector('input[name="aud"]:checked').value;
+    const f0 = parseFloat(audFreq.value)||220;
+
+    if(mode==='freerun' && (AUD_ABUF || (AUD_FULL && AUD_FULL.length>0))){
+      const src=ac.createBufferSource();
+      if(AUD_ABUF){ src.buffer=AUD_ABUF; } else { const ab=ac.createBuffer(1, AUD_FULL.length, Math.max(8000,Math.min(192000, AUD_SR||44100))); ab.copyToChannel(AUD_FULL,0); src.buffer=ab; }
+      const g=ac.createGain();
+      const L=Math.min(src.buffer.length, Math.floor(src.buffer.sampleRate*1.0)); const tmp=new Float32Array(L); src.buffer.copyFromChannel(tmp,0,0); const rms=computeRMS(tmp); const target=0.22; g.gain.setValueAtTime(Math.min(4,Math.max(0.05,target/Math.max(1e-6,rms))), ac.currentTime);
+      __audRefHz = 220; src.playbackRate.value = f0 / __audRefHz; pitchRefEl.textContent = `Free‑run reference: ${__audRefHz} Hz`;
+      src.connect(g).connect(ac.destination); __audSrc=src; __audGain=g; __audMode='freerun';
+      src.start(ac.currentTime+0.01);
+      const dur=Math.min(2.5, src.buffer.duration / Math.max(1e-6, src.playbackRate.value)); setTimeout(()=>{ stopAudition(); }, dur*1000+60);
+    }else{
+      const cyc=new Float32Array(editorBuf);
+      const xfade=48; for(let i=0;i<xfade;i++){ const a=cyc[N-xfade+i], b=cyc[i]; const t=i/(xfade-1); const wa=Math.cos(0.5*Math.PI*t), wb=Math.sin(0.5*Math.PI*t); const v=wa*a+wb*b; cyc[i]=v; cyc[N-xfade+i]=v; }
+      const o=ac.createOscillator(); o.setPeriodicWave(WT_fftToPeriodicWave(ac,cyc,f0)); o.frequency.value=f0;
+      const g=ac.createGain(); g.gain.value=0.18; o.connect(g).connect(ac.destination);
+      __audSrc=o; __audGain=g; __audMode='periodic';
+      o.start(); setTimeout(()=>{ stopAudition(); }, 1200);
+    }
+  }catch(e){ console.warn(e); }
+});
+audFreq.addEventListener('input', ()=>{
+  const f0 = parseFloat(audFreq.value)||220;
+  if(!__audCtx || !__audSrc) return;
+  try{
+    if(__audMode==='freerun' && __audSrc.playbackRate){
+      __audSrc.playbackRate.setValueAtTime(f0/(__audRefHz||220), __audCtx.currentTime);
+    }else if(__audMode==='periodic' && __audSrc.frequency){
+      __audSrc.frequency.setValueAtTime(f0, __audCtx.currentTime);
+    }
+  }catch(e){}
+});
+
+/* ===== Export ===== */
+document.getElementById('export').addEventListener('click', ()=>{
+  safeCommit();
+  const name=(document.getElementById('export_name').value||'Custom WT').trim();
+  const outFrames=[];
+  for(let i=0;i<Math.min(frames.length,MAX_FRAMES); i++){ if(!frames[i]) continue; outFrames.push(new Float32Array(frames[i])); }
+  window.dispatchEvent(new CustomEvent('wt:export',{detail:{name,frames:outFrames}}));
+  flashStatus('Exported "'+name+'" (event wt:export)','ok');
+  console.log('[WT] Exported:', name, outFrames);
+});
+
+/* ===== Public API ===== */
+window.__WT_getFrames = ()=> frames.map(f=> new Float32Array(f));
+window.__WT_setFrames = (arr)=>{
+  if(!Array.isArray(arr)||!arr.length) return;
+  frames = arr.slice(0,MAX_FRAMES).map(x=>{ const f=new Float32Array(N); if(x&&x.length){ f.set(resample1D(Float32Array.from(x),N)); } return dcRemove(normalize(f)); });
+  current=0; editorBuf.set(frames[0]); frameIdx.value=String(current); refreshThumbs(); updateFrameLabel(); paintEditor();
+};
+window.__WT_exportToOscs = (name)=>{ document.getElementById('export_name').value=name||'Custom WT'; document.getElementById('export').click(); };
+
+/* ===== Init ===== */
+refreshThumbs(); updateFrameLabel(); paintEditor();
+
+})(); // end IIFE
+</script>
+
 </body>
 
 
 
 </html>
-
