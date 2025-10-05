@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 
 <script>try{if(typeof window.$!=='function'){window.$=(id)=>document.getElementById(id);}}catch(e){}</script>
@@ -988,9 +988,12 @@ function makeSynth(a){
       // Main & sub osc
       const mainType=isCustomShape(params.shape)?params.shape:(shapeMap[params.shape]||'sawtooth');
       const subType =isCustomShape(params.subShape)?params.subShape:(shapeMap[params.subShape]||'off');
+      if(params) params.__wtChannel='main';
       const main=(mainType==='noise')?[noise(params.noiseColor||'white')]:[ (window.oscFactory?window.oscFactory(a, freq*Math.pow(2,(params.detune||0)/1200), mainType, params) : osc(freq*Math.pow(2,(params.detune||0)/1200),mainType)) ];
+      if(params) params.__wtChannel='sub';
       const base=((params.subOctave||1)===0.5)?(freq/2):freq;
       const sub =(subType==='off')?[]:(subType==='noise')?[noise(params.noiseColor||'white')]:[ (window.oscFactory?window.oscFactory(a, base*Math.pow(2,(params.subDetune||0)/1200), subType, params) : osc(base*Math.pow(2,(params.subDetune||0)/1200),subType)) ];
+      if(params) delete params.__wtChannel;
 
       const subG=a.createGain(); subG.gain.value=Math.max(0,Math.min(1,params.subLevel||0)); subG.connect(g);
       main.forEach(nd=>{ nd.connect(g); try{ nd.start() }catch(e){} });
@@ -2995,51 +2998,137 @@ registerProcessor('${WORKLET_NAME}', MorphWTProcessor);`
     return { mips, levelLens };
   }
 
-  function makeNodeFromFrames(ac, freq, frames){
+  function makeNodeFromFrames(ac, freq, frames, channel='main'){
     const { mips, levelLens } = framesToMip(frames);
     const node = new AudioWorkletNode(ac, WORKLET_NAME, { numberOfOutputs:1, outputChannelCount:[1] });
-    // pack for transfer: we need an array of arrays of Float32Array. We can send as-is; structured clone will handle TypedArrays.
     node.port.postMessage({ type:'tables', frames:mips, levelLens });
     const freqParam = node.parameters.get('frequency');
     const morphParam = node.parameters.get('morph');
     const gainParam = node.parameters.get('gain');
     if(freqParam) freqParam.value = freq||440;
-    if(morphParam) morphParam.value = window.__WT_MORPH__ ?? 0;
+    const initialMorph = (window.CustomWT && typeof window.CustomWT.getMorphChannel==='function') ? window.CustomWT.getMorphChannel(channel) : (window.__WT_MORPH__ ?? 0);
+    if(morphParam) morphParam.value = initialMorph;
     if(gainParam) gainParam.value = 1.0;
-    // Provide Oscillator-like proxy so existing voice code keeps working
     const proxy = {
       __node: node,
+      __wtChannel: channel,
       connect: (...a)=>node.connect(...a),
-      disconnect: (...a)=>{ try{ node.disconnect(...a) }catch(e){} },
-      start: ()=>{}, // envelope handles gating; we keep oscillator running
-      stop: (when)=>{ /* allow graceful GC */ setTimeout(()=>{ try{ node.disconnect(); }catch(e){} }, 1000); },
-      get frequency(){ return { get value(){ return freqParam?.value ?? 0; }, set value(v){ try{ freqParam?.setTargetAtTime(v, ac.currentTime, 0.003); }catch{ if(freqParam) freqParam.value=v; } } } }
+      disconnect: (...a)=>{ try{ node.disconnect(...a); }catch(e){} },
+      start: ()=>{},
+      stop: (when)=>{ setTimeout(()=>{ try{ node.disconnect(); }catch(e){} }, 1000); try{ window.CustomWT && window.CustomWT._unregister(proxy); }catch(e){} },
+      get frequency(){
+        return {
+          get value(){ return freqParam?.value ?? 0; },
+          set value(v){ try{ freqParam?.setTargetAtTime(v, ac.currentTime, 0.003); }catch{ if(freqParam) freqParam.value=v; } },
+          setValueAtTime(v,t){ try{ freqParam?.setValueAtTime(v,t); }catch(_){ } },
+          linearRampToValueAtTime(v,t){ try{ freqParam?.linearRampToValueAtTime(v,t); }catch(_){ } },
+          cancelScheduledValues(t){ try{ freqParam?.cancelScheduledValues(t); }catch(_){ } }
+        };
+      }
     };
-    // Register to receive morph updates
-    try{ window.CustomWT && window.CustomWT._register(proxy, morphParam, ac); }catch(e){}
+    try{ window.CustomWT && window.CustomWT._register(proxy, morphParam, ac, channel); }catch(e){}
     return proxy;
   }
+  window.makeNodeFromFrames = makeNodeFromFrames;
 
-  // ---- Global CustomWT API ----
+  function reflectChannelSlider(channel, value){
+    const slider = document.querySelector(`.wt-pos-block input[data-wt-channel="${channel}"]`);
+    if(!slider) return;
+    const clamped = clamp(value,0,1);
+    if(Math.abs((parseFloat(slider.value||'0')||0)-clamped) > 1e-4){ slider.value = clamped.toFixed(3); }
+    const readout = slider.__wtReadout;
+    if(readout){ const frames = parseInt(slider.getAttribute('data-wt-frames')||'32',10); const idx = Math.round(clamped * Math.max(0, frames-1)); readout.textContent = `Frame ${idx+1} / ${frames}`; }
+  }
+
   const CustomWT = {
     _lib: loadLib(),
     _morph: 0,
     _nodes: new Set(),
-    _register(proxy, morphParam, ac){ this._nodes.add({proxy, morphParam, ac}); },
-    _unregister(proxy){ for(const rec of Array.from(this._nodes)){ if(rec.proxy===proxy) this._nodes.delete(rec); } },
+    _channelMorph: new Map([['main',0],['sub',0],['preview',0]]),
+    _register(proxy, morphParam, ac, channel='main'){
+      const rec={proxy, morphParam, ac, channel};
+      this._nodes.add(rec);
+      const stored=this.getMorphChannel(channel);
+      if(morphParam){
+        try{
+          if(typeof morphParam.setValueAtTime==='function'){
+            morphParam.setValueAtTime(stored, ac.currentTime);
+          }else if('value' in morphParam){
+            morphParam.value=stored;
+          }
+        }catch(_){
+          try{ morphParam.value=stored; }catch(__){}
+        }
+      }else if(proxy && typeof proxy.__setMorph==='function'){
+        try{ proxy.__setMorph(stored); }catch(__){}
+      }
+      if(proxy) proxy.__wtChannel=channel;
+      return rec;
+    },
+    _unregister(proxy){
+      for(const rec of Array.from(this._nodes)){
+        if(rec.proxy===proxy) this._nodes.delete(rec);
+      }
+    },
+    _applyMorph(rec, value){
+      if(rec.morphParam){
+        try{
+          if(typeof rec.morphParam.setTargetAtTime==='function'){
+            rec.morphParam.setTargetAtTime(value, rec.ac.currentTime, 0.0035);
+          }else if('value' in rec.morphParam){
+            rec.morphParam.value=value;
+          }
+        }catch(_){
+          try{ rec.morphParam.value=value; }catch(__){}
+        }
+      }else if(rec.proxy && typeof rec.proxy.__setMorph==='function'){
+        try{ rec.proxy.__setMorph(value); }catch(__){}
+      }
+    },
     getMorph(){ return this._morph; },
+    getMorphChannel(channel){ return this._channelMorph.has(channel) ? this._channelMorph.get(channel) : this._morph; },
     setMorph(v){
       v = clamp(v,0,1);
-      this._morph = v;
-      const t = nowAC();
-      for(const rec of this._nodes){
-        try{ rec.morphParam?.setTargetAtTime(v, rec.ac.currentTime, 0.0035); }catch(e){}
-      }
-      // reflect UI frame slider if present
-      const fr = document.getElementById('wt_frame_idx'); const rd=document.getElementById('wt_frame_readout');
+      this._morph=v;
+      window.__WT_MORPH__ = v;
+      this._channelMorph.set('main', v);
+      this._channelMorph.set('sub', v);
+      this._channelMorph.set('preview', v);
+      for(const rec of this._nodes){ this._applyMorph(rec, v); }
+      reflectChannelSlider('main', v);
+      reflectChannelSlider('sub', v);
+      reflectChannelSlider('preview', v);
+      const fr=document.getElementById('wt_frame_idx'); const rd=document.getElementById('wt_frame_readout');
       try{
-        if(fr && fr.max){ const N=parseInt(fr.max||'0')+1; const idx=Math.round(v*(N-1)); fr.value=String(idx); fr.dispatchEvent(new Event('input',{bubbles:true})); if(rd) rd.textContent=(idx+1)+'/'+N; }
-      }catch(e){}
+        if(fr && fr.max){
+          const N=parseInt(fr.max||'0',10)+1;
+          const idx=Math.round(v*(N-1));
+          fr.value=String(idx);
+          fr.dispatchEvent(new Event('input',{bubbles:true}));
+          if(rd) rd.textContent=(idx+1)+'/'+N;
+        }
+      }catch(_){ }
+    },
+    setMorphChannel(channel, value){
+      channel=channel||'main';
+      const v=clamp(value,0,1);
+      this._channelMorph.set(channel, v);
+      for(const rec of this._nodes){
+        if(rec.channel===channel){ this._applyMorph(rec, v); }
+      }
+      if(channel==='main'){ this._morph=v; window.__WT_MORPH__ = v; }
+      reflectChannelSlider(channel, v);
+      if(channel==='main'){
+        const fr=document.getElementById('wt_frame_idx'); const rd=document.getElementById('wt_frame_readout');
+        try{
+          if(fr && fr.max){
+            const N=parseInt(fr.max||'0',10)+1;
+            const idx=Math.round(v*(N-1));
+            fr.value=String(idx);
+            if(rd) rd.textContent=(idx+1)+'/'+N;
+          }
+        }catch(_){ }
+      }
     },
     list(){ return listNamesNewestFirst(this._lib); },
     get(name){ return this._lib[name]; },
@@ -3069,18 +3158,21 @@ registerProcessor('${WORKLET_NAME}', MorphWTProcessor);`
         groups.forEach(g=>g.appendChild(o.cloneNode(true)));
       });
       if(sel){
-        const sels = [document.getElementById('shape'), document.getElementById('subShape')];
+        const sels=[document.getElementById('shape'), document.getElementById('subShape')];
         sels.forEach(s=>{ if(!s) return; const idx = Array.from(s.options).findIndex(o=>o.value==='custom:'+sel); if(idx>=0) s.selectedIndex = idx; });
       }
     },
-    makeNode(ac, freq, nameOrFrames){
-      if(Array.isArray(nameOrFrames)){ return makeNodeFromFrames(ac, freq, nameOrFrames); }
+    makeNode(ac, freq, nameOrFrames, opts){
+      const options = (opts && typeof opts==='object' && !Array.isArray(opts)) ? opts : {};
+      const channel = options.channel || 'main';
+      if(Array.isArray(nameOrFrames)){ return makeNodeFromFrames(ac, freq, nameOrFrames, channel); }
       const rec = this._lib[nameOrFrames]; if(!rec || !rec.frames) return null;
       const frames = rec.frames.map(a=>Float32Array.from(a));
-      return makeNodeFromFrames(ac, freq, frames);
+      return makeNodeFromFrames(ac, freq, frames, channel);
     }
   };
   window.CustomWT = CustomWT;
+  try{ ensureWorklet().catch(()=>{}); }catch(_){ }
 
   // ---- Hook into synth voice creation via oscFactory ----
   (function(){
@@ -3088,7 +3180,8 @@ registerProcessor('${WORKLET_NAME}', MorphWTProcessor);`
     window.oscFactory = function(ac, freq, type, params){
       if(typeof type==='string' && type.startsWith('custom:')){
         const nm = type.slice(7);
-        const node = CustomWT.makeNode(ac, freq||440, nm);
+        const channel = (params && params.__wtChannel) || 'main';
+        const node = CustomWT.makeNode(ac, freq||440, nm, { channel });
         if(!node){ console.warn('[WT] Unknown wavetable', nm); return ac.createOscillator(); }
         return node;
       }
@@ -3225,17 +3318,19 @@ registerProcessor('${WORKLET_NAME}', MorphWTProcessor);`
       return (window.__WT_EDIT_FRAMES__||[]).map(f=>Float32Array.from(f));
     }
     function setPreviewOn(on){
-      window.__WT_PREVIEW_NODE__ && (function(){
-        try{ window.__WT_PREVIEW_NODE__.disconnect(); }catch(e){};
+      if(window.__WT_PREVIEW_NODE__){
+        try{ window.CustomWT && typeof CustomWT._unregister==='function' && CustomWT._unregister(window.__WT_PREVIEW_NODE__); }catch(e){}
+        try{ window.__WT_PREVIEW_NODE__.disconnect?.(); }catch(e){}
+        try{ window.__WT_PREVIEW_NODE__.stop?.(); }catch(e){}
         window.__WT_PREVIEW_NODE__ = null;
-      })();
+      }
       const chk=document.getElementById('wt_preview_chk');
       if(on){
         ensureWorklet().then(()=>{
           const ac=window.audioCtx;
           const frames=getCurrentFrames();
           if(!frames || frames.length===0){ if(chk) chk.checked=false; return; }
-          const node = CustomWT.makeNode(ac, 220, frames);
+          const node = CustomWT.makeNode(ac, 220, frames, { channel:'preview' });
           const g = ac.createGain(); g.gain.value = 0.2; node.connect(g); g.connect(ac.destination);
           window.__WT_PREVIEW_NODE__ = node;
         });
@@ -3252,7 +3347,9 @@ registerProcessor('${WORKLET_NAME}', MorphWTProcessor);`
       repl.addEventListener('input', (e)=>{
         const N=parseInt(repl.max||'0')+1;
         const idx=parseInt(repl.value||'0')|0;
-        CustomWT.setMorph(N>1 ? idx/(N-1) : 0);
+        const v = N>1 ? idx/(N-1) : 0;
+        if(typeof CustomWT.setMorphChannel==='function'){ CustomWT.setMorphChannel('preview', v); }
+        CustomWT.setMorph(v);
       });
     }
 
@@ -3853,66 +3950,39 @@ function stopAudition(){ try{ if(__audSrc){ __audSrc.stop(); __audSrc.disconnect
 function WT_fftToPeriodicWave(ac, wave, f0){ const nyq=ac.sampleRate*0.5, kmax=Math.max(1,Math.min(Math.floor(nyq/Math.max(1e-3,f0)), Math.floor(N/2)-1)); const real=new Float32Array(kmax+1), imag=new Float32Array(kmax+1); for(let k=1;k<=kmax;k++){ let a=0,b=0; for(let n=0;n<N;n++){ const phi=2*Math.PI*k*n/N, x=wave[n]; a+=x*Math.cos(phi); b-=x*Math.sin(phi); } real[k]=(2/N)*a; imag[k]=(2/N)*b; } return ac.createPeriodicWave(real,imag,{disableNormalization:true}); }
 function computeRMS(y){ let s=0; for(let i=0;i<y.length;i++) s+=y[i]*y[i]; return Math.sqrt(s/Math.max(1,y.length)); }
 
+function editorFrameHasEnergy(threshold=1e-5){ if(!editorBuf) return false; for(let i=0;i<editorBuf.length;i++){ if(Math.abs(editorBuf[i])>threshold) return true; } return false; }
+function prepareEditorCycle(){ const src = editorBuf ? Float32Array.from(editorBuf) : new Float32Array(N); if(src.length===0){ return new Float32Array(N); } let cyc = dcRemove(src); cyc = normalize(cyc); const xfade = Math.min(48, Math.floor(cyc.length/2)); if(xfade>1){ for(let i=0;i<xfade;i++){ const idxA = cyc.length - xfade + i; if(idxA<0 || idxA>=cyc.length) continue; const idxB = i; const t = i/xfade; const wa = Math.cos(0.5*Math.PI*t); const wb = Math.sin(0.5*Math.PI*t); const v = wa*cyc[idxA] + wb*cyc[idxB]; cyc[idxB] = v; cyc[idxA] = v; } } return cyc; }
+function playEditorCycle(ac, f0, mode){ const cyc = prepareEditorCycle(); const ab = ac.createBuffer(1, cyc.length, ac.sampleRate); ab.copyToChannel(cyc, 0); const src = ac.createBufferSource(); src.buffer = ab; src.loop = true; src.loopStart = 0; src.loopEnd = ab.duration; const refHz = ac.sampleRate / Math.max(1, cyc.length); __audRefHz = refHz; src.playbackRate.value = f0 / refHz; pitchRefEl.textContent = mode==='freerun' ? `Free‑run frame reference: ${refHz.toFixed(1)} Hz` : `Cycle reference: ${refHz.toFixed(1)} Hz`; const g = ac.createGain(); const rms = computeRMS(cyc); const target = 0.22; g.gain.setValueAtTime(0.0001, ac.currentTime); g.gain.linearRampToValueAtTime(Math.min(0.9, Math.max(0.05, target/Math.max(1e-6, rms))), ac.currentTime + 0.02); src.connect(g).connect(ac.destination); __audSrc = src; __audGain = g; __audMode = mode; src.start(ac.currentTime + 0.01); setTimeout(()=>{ stopAudition(); }, 1200); return src; }
+
 auditionB.addEventListener('click', async ()=>{
   stopAudition();
   try{
     const ac = await ensureCtx();
     const mode = document.querySelector('input[name="aud"]:checked').value;
     const f0 = parseFloat(audFreq.value)||220;
+    const hasEditor = editorFrameHasEnergy();
 
-    if(mode==='freerun' && (AUD_ABUF || (AUD_FULL && AUD_FULL.length>0))){
-  const src=ac.createBufferSource();
-  if(AUD_ABUF){ src.buffer=AUD_ABUF; } else { const ab=ac.createBuffer(1, AUD_FULL.length, Math.max(8000,Math.min(192000, AUD_SR||44100))); ab.copyToChannel(AUD_FULL,0); src.buffer=ab; }
-  const g=ac.createGain();
-  const L=Math.min(src.buffer.length, Math.floor(src.buffer.sampleRate*0.02));
-  g.gain.setValueAtTime(0.0001, ac.currentTime);
-  const rms=computeRMS(src.buffer.getChannelData(0));
-  const target=0.22; g.gain.linearRampToValueAtTime(Math.min(0.9,Math.max(0.05,target/Math.max(1e-6,rms))), ac.currentTime);
-  __audRefHz = 220; src.playbackRate.value = f0 / __audRefHz; pitchRefEl.textContent = `Free‑run reference: ${__audRefHz} Hz`;
-  src.connect(g).connect(ac.destination); __audSrc=src; __audGain=g; __audMode='freerun';
-  src.start(ac.currentTime+0.01);
-  const dur=Math.min(2.5, src.buffer.duration / Math.max(1e-3, src.playbackRate.value)); setTimeout(()=>{ stopAudition(); }, dur*1000+60);
-}else{
-  // Exact 1‑cycle loop audition from the editor buffer
-  let cyc = new Float32Array(editorBuf);
-  // DC remove & normalize (peak)
-  cyc = dcRemove(cyc); normalize(cyc);
-  // Seam crossfade at ends for clickless loop
-  const xfade = 48;
-  for(let i=0;i<xfade;i++){
-    const t = i/xfade;
-    const a = cyc[cyc.length - xfade + i];
-    const b = cyc[i];
-    const wa = Math.cos(0.5*Math.PI*t);
-    const wb = Math.sin(0.5*Math.PI*t);
-    const v = wa*a + wb*b;
-    cyc[i] = v; cyc[cyc.length - xfade + i] = v;
-  }
-  // Build 1‑cycle buffer and loop
-  const ab = ac.createBuffer(1, cyc.length, ac.sampleRate);
-  ab.copyToChannel(cyc, 0);
-  const src = ac.createBufferSource();
-  src.buffer = ab;
-  src.loop = true;
-  src.loopStart = 0;
-  src.loopEnd = ab.duration;
-  // Reference frequency for one cycle at rate=1
-  const refHz = ac.sampleRate / cyc.length;
-  __audRefHz = refHz;
-  src.playbackRate.value = f0 / refHz;
-  pitchRefEl.textContent = `Cycle reference: ${refHz.toFixed(1)} Hz`;
-  // Gain with RMS‑based normalization
-  const g = ac.createGain();
-  const rms = computeRMS(cyc);
-  const target = 0.22;
-  g.gain.setValueAtTime(0.0001, ac.currentTime);
-  g.gain.linearRampToValueAtTime(Math.min(0.9, Math.max(0.05, target/Math.max(1e-6, rms))), ac.currentTime + 0.02);
-  src.connect(g).connect(ac.destination);
-  __audSrc = src; __audGain = g; __audMode = 'cycle';
-  src.start(ac.currentTime + 0.01);
-  setTimeout(()=>{ stopAudition(); }, 1200);
-}
-}catch(e){ console.warn(e); }
+    if(mode==='freerun'){
+      if(hasEditor){
+        playEditorCycle(ac, f0, 'freerun');
+      }else if(AUD_ABUF || (AUD_FULL && AUD_FULL.length>0)){
+        const src=ac.createBufferSource();
+        if(AUD_ABUF){ src.buffer=AUD_ABUF; } else { const ab=ac.createBuffer(1, AUD_FULL.length, Math.max(8000,Math.min(192000, AUD_SR||44100))); ab.copyToChannel(AUD_FULL,0); src.buffer=ab; }
+        const g=ac.createGain();
+        g.gain.setValueAtTime(0.0001, ac.currentTime);
+        const rms=computeRMS(src.buffer.getChannelData(0));
+        const target=0.22; g.gain.linearRampToValueAtTime(Math.min(0.9,Math.max(0.05,target/Math.max(1e-6,rms))), ac.currentTime);
+        __audRefHz = 220; src.playbackRate.value = f0 / __audRefHz; pitchRefEl.textContent = `Free‑run reference: ${__audRefHz} Hz`;
+        src.connect(g).connect(ac.destination); __audSrc=src; __audGain=g; __audMode='freerun';
+        src.start(ac.currentTime+0.01);
+        const dur=Math.min(2.5, src.buffer.duration / Math.max(1e-3, src.playbackRate.value)); setTimeout(()=>{ stopAudition(); }, dur*1000+60);
+      }else{
+        playEditorCycle(ac, f0, 'freerun');
+      }
+    }else{
+      playEditorCycle(ac, f0, 'cycle');
+    }
+  }catch(e){ console.warn(e); }
 });
 audFreq.addEventListener('input', ()=>{
   const f0 = parseFloat(audFreq.value)||220;
@@ -4034,72 +4104,101 @@ refreshThumbs(); updateFrameLabel(); paintEditor();
     };
   }
 
-  function makePeriodicProxy(ac, freq, frames){
-  const src = (frames && frames[0]) ? frames[0] : null;
-  if(!src){ return null; }
-  const N0 = src.length >>> 0;
-  // Copy, seam-seal (make first==last), and zero-center
-  const fr = new Float32Array(N0);
-  for(let i=0;i<N0;i++) fr[i] = src[i];
-  // Seam seal: linear ramp to make endpoints equal
-  const delta = fr[0] - fr[N0-1];
-  for(let i=0;i<N0;i++){ fr[i] -= delta * (i/(N0-1)); }
-  // Zero-center
-  let mean=0; for(let i=0;i<N0;i++) mean += fr[i]; mean /= (N0||1);
-  for(let i=0;i<N0;i++) fr[i] -= mean;
-
-  // Fundamental after 3-oct downscale
-  const f0 = Math.max(1e-3, (freq || 440) * __WT_PITCH_MUL__);
-  const nyq = ac.sampleRate * 0.5;
-  const maxKByFreq = Math.max(1, Math.floor((nyq * 0.70) / f0)); // conservative margin
-  const H = Math.min(96, Math.floor(N0/2), maxKByFreq);
-  const real = new Float32Array(H+1);
-  const imag = new Float32Array(H+1);
-
-  // Peak (for loudness calibration)
-  let peak = 0; for(let n=0;n<N0;n++){ const a = Math.abs(fr[n]); if(a>peak) peak=a; }
-
-  // Fourier coeffs (WebAudio convention)
-  for(let k=1;k<=H;k++){
-    let a=0, b=0;
-    for(let n=0;n<N0;n++){
-      const x = fr[n];
-      const phi = 2*Math.PI*k*n/N0;
-      a += x * Math.cos(phi);
-      b += x * Math.sin(phi);
+  function makePeriodicProxy(ac, freq, frames, options={}){
+    if(!frames || !frames.length) return null;
+    const channel = options.channel || 'main';
+    const sanitized = frames.map(src=>{
+      const arr = Float32Array.from(src||[]);
+      const N = arr.length>>>0;
+      if(!N) return arr;
+      const out = new Float32Array(N);
+      for(let i=0;i<N;i++) out[i] = arr[i];
+      const end = N-1 || 1;
+      const delta = out[0] - out[end];
+      for(let i=0;i<N;i++){ out[i] -= delta * (i/(end||1)); }
+      let mean = 0; for(let i=0;i<N;i++) mean += out[i]; mean /= (N||1);
+      for(let i=0;i<N;i++) out[i] -= mean;
+      return out;
+    });
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    const state = { morph:0 };
+    function mixFrame(m){
+      const clamped = Math.max(0, Math.min(1, m||0));
+      const pos = clamped * (sanitized.length-1);
+      const i0 = Math.floor(pos);
+      const i1 = Math.min(sanitized.length-1, i0+1);
+      const frac = pos - i0;
+      const a = sanitized[i0];
+      const b = sanitized[i1];
+      const N = a.length;
+      const out = new Float32Array(N);
+      for(let i=0;i<N;i++){ out[i] = (a[i]||0)*(1-frac) + (b[i]||0)*frac; }
+      return out;
     }
-    real[k] = (2/N0) * a;
-    imag[k] = (2/N0) * b;
+    function frameToPeriodic(frame){
+      const N0 = frame.length>>>0;
+      if(!N0) return { wave:null, peak:0 };
+      const cut = Math.min(96, Math.floor(N0/2));
+      const real = new Float32Array(cut+1);
+      const imag = new Float32Array(cut+1);
+      let peak = 0; for(let n=0;n<N0;n++){ const a=Math.abs(frame[n]); if(a>peak) peak=a; }
+      for(let k=1;k<=cut;k++){
+        let a=0,b=0;
+        for(let n=0;n<N0;n++){
+          const x=frame[n];
+          const phi=2*Math.PI*k*n/N0;
+          a+=x*Math.cos(phi);
+          b+=x*Math.sin(phi);
+        }
+        real[k]=(2/N0)*a;
+        imag[k]=(2/N0)*b;
+      }
+      return { wave: ac.createPeriodicWave(real, imag, { disableNormalization:false }), peak };
+    }
+    function applyMorph(m){
+      state.morph = Math.max(0, Math.min(1, m||0));
+      const frame = mixFrame(state.morph);
+      const { wave, peak } = frameToPeriodic(frame);
+      if(wave){
+        osc.setPeriodicWave(wave);
+        const targetPk = 0.7;
+        const scale = (peak && isFinite(peak)) ? (targetPk/peak) : 1.0;
+        gain.gain.setValueAtTime(Math.max(0.1, Math.min(1.5, scale)), ac.currentTime);
+      }
+    }
+    const initial = (window.CustomWT && typeof CustomWT.getMorphChannel==='function') ? CustomWT.getMorphChannel(channel) : 0;
+    applyMorph(initial);
+    const f0 = Math.max(1e-3, (freq || 440) * __WT_PITCH_MUL__);
+    osc.frequency.value = f0;
+    let connected = false;
+    const proxy = {
+      __osc: osc,
+      __gain: gain,
+      __wtChannel: channel,
+      __setMorph: (v)=>applyMorph(v),
+      connect: (...a)=>{ if(!connected){ osc.connect(gain); connected = true; } return gain.connect(...a); },
+      disconnect: (...a)=>{ try{ gain.disconnect(...a); }catch(e){} try{ osc.disconnect(); connected = false; }catch(e){} },
+      start: (t)=>{ try{ osc.start(t); }catch(e){} },
+      stop:  (t)=>{ try{ osc.stop(t); }catch(e){} connected = false; try{ window.CustomWT && window.CustomWT._unregister(proxy); }catch(e){} },
+      get frequency(){ return makeFreqProxy(osc.frequency, __WT_PITCH_MUL__); }
+    };
+    const morphParam = {
+      setTargetAtTime: (v)=>applyMorph(v),
+      setValueAtTime: (v)=>applyMorph(v),
+      linearRampToValueAtTime: (v)=>applyMorph(v),
+      value: initial
+    };
+    try{ window.CustomWT && window.CustomWT._register(proxy, morphParam, ac, channel); }catch(e){}
+    return proxy;
   }
-
-  const osc = ac.createOscillator();
-  const pw  = ac.createPeriodicWave(real, imag, { disableNormalization: false });
-  osc.setPeriodicWave(pw);
-  osc.frequency.value = f0;
-
-  // Softer calibrated gain
-  const g = ac.createGain();
-  const targetPk = 0.7;
-  const scale = (peak && isFinite(peak)) ? (targetPk / peak) : 1.0;
-  g.gain.value = Math.max(0.1, Math.min(1.5, scale));
-
-  return {
-    __osc: osc,
-    __gain: g,
-    connect: (...a)=>{ osc.connect(g); return g.connect(...a); },
-    disconnect: (...a)=>{ try{ g.disconnect(...a) }catch(e){} try{ osc.disconnect() }catch(e){} },
-    start: (t)=>{ try{ osc.start(t) }catch(e){} },
-    stop:  (t)=>{ try{ osc.stop(t) }catch(e){} },
-    get frequency(){ return makeFreqProxy(osc.frequency, __WT_PITCH_MUL__); }
-  };
-}
 
 // Provide/override CustomWT.makeNode with accurate fallback
   (function(){
     window.CustomWT = window.CustomWT || {};
     const prev = CustomWT.makeNode;
     CustomWT.get = CustomWT.get || window.CustomWT.get;
-    CustomWT.makeNode = function(ac, freq, nameOrFrames){
+    CustomWT.makeNode = function(ac, freq, nameOrFrames, opts){
       // Prefer existing AudioWorklet engine when available
       try{
         const hasAW = !!(ac && ac.audioWorklet);
@@ -4108,6 +4207,8 @@ refreshThumbs(); updateFrameLabel(); paintEditor();
         }
       }catch(_){}
 
+      const options = (opts && typeof opts==='object' && !Array.isArray(opts)) ? opts : {};
+      const channel = options.channel || 'main';
       let frames = null;
       if(Array.isArray(nameOrFrames)){
         frames = nameOrFrames.map(f=>Float32Array.from(f));
@@ -4115,9 +4216,9 @@ refreshThumbs(); updateFrameLabel(); paintEditor();
         try{ const rec = this.get ? this.get(nameOrFrames) : null; frames = rec && rec.frames && rec.frames.map(f=>Float32Array.from(f)); }catch(e){}
         if((!frames || !frames.length) && window.__WT_LOCAL_LIB__){ try{ frames = window.__WT_LOCAL_LIB__.get(nameOrFrames); }catch(e){} }
       }
-      const proxy = makePeriodicProxy(ac, freq||440, frames);
+      const proxy = makePeriodicProxy(ac, freq||440, frames, { channel });
       if(proxy) return proxy;
-      return prev ? prev.call(this, ac, freq, nameOrFrames) : null;
+      return prev ? prev.call(this, ac, freq, nameOrFrames, options) : null;
     };
   })();
 
@@ -4130,7 +4231,8 @@ refreshThumbs(); updateFrameLabel(); paintEditor();
       try{
         if(typeof type==='string' && type.startsWith('custom:') && window.CustomWT){
           const nm = type.slice(7);
-          const node = CustomWT.makeNode(ac, freq||440, nm);
+          const channel = (params && params.__wtChannel) || 'main';
+          const node = CustomWT.makeNode(ac, freq||440, nm, { channel });
           if(node) return node;
         }
       }catch(e){ console.warn('[oscFactory custom] error', e); }
@@ -4179,25 +4281,103 @@ refreshThumbs(); updateFrameLabel(); paintEditor();
           block = document.createElement('div');
           block.className = 'wt-pos-block';
           block.style.cssText = 'display:none; margin:8px 0 6px 0; width:100%;';
-          const label = document.createElement('div'); label.textContent='Position'; label.style.cssText='font-size:0.9rem; opacity:.8; margin-bottom:4px;';
-          const slider = document.createElement('input'); slider.type='range'; slider.min='0'; slider.max='1'; slider.step='0.001'; slider.value='0'; slider.style.cssText='height:18px;';
+          const label = document.createElement('div');
+          label.textContent='Position';
+          label.style.cssText='font-size:0.9rem; opacity:.8; margin-bottom:4px;';
+          const slider = document.createElement('input');
+          slider.type='range';
+          slider.min='0';
+          slider.max='1';
+          slider.step='0.001';
+          slider.value='0';
+          slider.style.cssText='height:18px;';
+          slider.id = channel==='main' ? 'wt_shape_pos' : 'wt_sub_pos';
+          slider.setAttribute('data-midicc','');
+          slider.dataset.midicc = '1';
+          slider.setAttribute('data-wt-channel', channel);
+          slider.dataset.wtChannel = channel;
+          slider.setAttribute('data-wt-frames','32');
           slider.addEventListener('input', ()=>{
             const v = parseFloat(slider.value)||0;
             if(window.CustomWT){
               if(typeof CustomWT.setMorphChannel==='function') CustomWT.setMorphChannel(channel, v);
               else if(typeof CustomWT.setMorph==='function') CustomWT.setMorph(v);
             }
+            if(slider.__wtReadout){
+              const frames = parseInt(slider.getAttribute('data-wt-frames')||'32',10);
+              const idx = Math.round(Math.max(0, Math.min(1, v)) * Math.max(0, frames-1));
+              slider.__wtReadout.textContent = `Frame ${idx+1} / ${frames}`;
+            }
           }, {passive:true});
-          block.appendChild(label); block.appendChild(slider);
+          slider.addEventListener('click', ()=>{
+            if(!window.midiLearn) return;
+            document.querySelectorAll('[data-midicc]').forEach(e=>e.classList.remove('midi-learn-on'));
+            learnTarget = slider.id;
+            slider.classList.add('midi-learn-on');
+          });
+          const readout = document.createElement('div');
+          readout.className = 'wt-pos-readout';
+          readout.style.cssText = 'font-size:0.75rem; opacity:.7; margin-top:4px;';
+          slider.__wtReadout = readout;
+          slider.__wtInit = true;
+          block.appendChild(label);
+          block.appendChild(slider);
+          block.appendChild(readout);
           sel.insertAdjacentElement('afterend', block);
           sel.__wtPosBlock = block;
+        }
+      }
+      const slider = block.querySelector('input[type="range"]');
+      if(slider){
+        if(!slider.__wtInit){
+          slider.__wtInit = true;
+          slider.id = channel==='main' ? 'wt_shape_pos' : 'wt_sub_pos';
+          slider.setAttribute('data-midicc','');
+          slider.dataset.midicc = '1';
+          slider.setAttribute('data-wt-channel', channel);
+          slider.dataset.wtChannel = channel;
+          slider.setAttribute('data-wt-frames','32');
+          slider.addEventListener('click', ()=>{
+            if(!window.midiLearn) return;
+            document.querySelectorAll('[data-midicc]').forEach(e=>e.classList.remove('midi-learn-on'));
+            learnTarget = slider.id;
+            slider.classList.add('midi-learn-on');
+          });
+          if(!slider.__wtReadout){
+            const ro = document.createElement('div');
+            ro.className = 'wt-pos-readout';
+            ro.style.cssText = 'font-size:0.75rem; opacity:.7; margin-top:4px;';
+            slider.__wtReadout = ro;
+            block.appendChild(ro);
+          }
+        }
+        const stored = (window.CustomWT && typeof CustomWT.getMorphChannel==='function') ? CustomWT.getMorphChannel(channel) : 0;
+        const init = Math.max(0, Math.min(1, Number.isFinite(stored)?stored:0));
+        slider.value = init.toFixed(3);
+        if(slider.__wtReadout){
+          const frames = parseInt(slider.getAttribute('data-wt-frames')||'32',10);
+          const idx = Math.round(init * Math.max(0, frames-1));
+          slider.__wtReadout.textContent = `Frame ${idx+1} / ${frames}`;
         }
       }
 
       function update(){
         const isCustom = /^custom:/.test(sel.value||'');
         block.style.display = isCustom ? 'block' : 'none';
-        if(isCustom){ window.__WT_CURRENT_CHANNEL = channel; applyWidth(sel, block); }
+        if(isCustom){
+          window.__WT_CURRENT_CHANNEL = channel;
+          applyWidth(sel, block);
+          if(slider){
+            const stored = (window.CustomWT && typeof CustomWT.getMorphChannel==='function') ? CustomWT.getMorphChannel(channel) : parseFloat(slider.value)||0;
+            const val = Math.max(0, Math.min(1, Number.isFinite(stored)?stored:0));
+            slider.value = val.toFixed(3);
+            if(slider.__wtReadout){
+              const frames = parseInt(slider.getAttribute('data-wt-frames')||'32',10);
+              const idx = Math.round(val * Math.max(0, frames-1));
+              slider.__wtReadout.textContent = `Frame ${idx+1} / ${frames}`;
+            }
+          }
+        }
       }
 
       if(!sel.__wtPosBlockBound){
@@ -4404,7 +4584,7 @@ refreshThumbs(); updateFrameLabel(); paintEditor();
     try{
       if(window.CustomWT && typeof window.makeNodeFromFrames === 'function'){
         const origGet = window.CustomWT.get ? window.CustomWT.get.bind(window.CustomWT) : (nm=> (window.CustomWT._lib||{})[nm]);
-        window.CustomWT.makeNode = function(ac, freq, nameOrFrames){
+        window.CustomWT.makeNode = function(ac, freq, nameOrFrames, opts){
           let frames=null;
           if(Array.isArray(nameOrFrames)){
             frames = nameOrFrames.map(f=>Float32Array.from(f));
@@ -4421,7 +4601,9 @@ refreshThumbs(); updateFrameLabel(); paintEditor();
             // endpoints already sealed via pipeline; keep as-is
             return a;
           });
-          return window.makeNodeFromFrames(ac, freq||440, fixed);
+          const options = (opts && typeof opts==='object' && !Array.isArray(opts)) ? opts : {};
+          const channel = options.channel || 'main';
+          return window.makeNodeFromFrames(ac, freq||440, fixed, channel);
         };
       }
     }catch(e){ console.warn('[WT3] makeNode restore failed', e); }
